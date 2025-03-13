@@ -1,5 +1,11 @@
-jhjihkj
+Article: Retico et al, Predictive Models Based on Support Vector Machines: Whole-Brain versus Regional Analysis of Structural MRI in the Alzheimer's Disease. J Neuroimaging. 2015 Jul-Aug;25(4):552-63
+DOI: 10.1111/jon.12163
 
+SPM Segmentation
+
+Librerie: Tenforflow/Keras, PyThorch
+
+Classfiers: SVM, DecisionTree (RandomForest, XGBoost), CNN, AlexNet, ResNet
 
 
 
