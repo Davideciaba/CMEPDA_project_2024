@@ -7,14 +7,17 @@ Librerie: Tenforflow/Keras, PyThorch
 
 Classfiers: SVM, DecisionTree (RandomForest, XGBoost), CNN, AlexNet, ResNet
 
+AD vs CN 
+Confrontare diversi modelli di machine learning:
+Due punti di partenza:
+- Utilizzare l'atlante neuromorfometrico (SPM package) per segmentare le regioni di interesse (MNI-152)
+- Analisi voxel level
 
+Due modi di classificare:
+- ROI Based --> RandomForest vs MLP;
+- Voxel-Based --> CNN:  U-net modificata vs ResNet;
 
-
-
-
-
-
-
+Nota bene: Se non facciamo in tempo, la prima cosa da abbandonare è la ResNet (se non ne troviamo una già fatta)
 
 
 
