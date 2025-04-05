@@ -1,8 +1,6 @@
 Article: Retico et al, Predictive Models Based on Support Vector Machines: Whole-Brain versus Regional Analysis of Structural MRI in the Alzheimer's Disease. J Neuroimaging. 2015 Jul-Aug;25(4):552-63
 DOI: 10.1111/jon.12163
 
-SPM Segmentation
-
 Librerie: Tenforflow/Keras, PyThorch
 
 Classfiers: SVM, DecisionTree (RandomForest, XGBoost), CNN, AlexNet, ResNet
@@ -19,7 +17,7 @@ Due modi di classificare:
 
 Nota bene: Se non facciamo in tempo, la prima cosa da abbandonare è la ResNet (se non ne troviamo una già fatta)
 
-
+Check the .gitattributes file in the GitHub repo in the case we want to use MatLab (pg. 8 Lecture2)
 
 
 
