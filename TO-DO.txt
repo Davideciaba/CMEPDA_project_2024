@@ -8,8 +8,15 @@ Classfiers: SVM, DecisionTree (RandomForest, XGBoost), CNN, AlexNet, ResNet
 AD vs CN 
 Confrontare diversi modelli di machine learning:
 Due punti di partenza:
-- Utilizzare l'atlante neuromorfometrico (SPM package) per segmentare le regioni di interesse (MNI-152)
-- Analisi voxel level
+- Utilizzare l'atlante neuromorfometrico (SPM package) per segmentare le regioni di interesse
+- Analisi voxel-wise 
+
+The algorithms (whether intensity-based for voxel-wise or segmentation-based for region-wise) have to
+compute a transformation that warps each subject’s brain anatomy to the MNI coordinate system.
+Once all images are registered into the MNI space, subsequent analyses—such as statistical comparisons or voxel-based 
+morphometry (statistical comparison of the the local concentration of brain tissues)—can be performed in a standardized
+setting. This consistency is critical for reproducibility and comparison across different studies.
+
 
 Due modi di classificare:
 - ROI Based --> RandomForest vs MLP;
