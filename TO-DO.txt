@@ -17,10 +17,12 @@ Once all images are registered into the MNI space, subsequent analyses—such as
 morphometry (statistical comparison of the the local concentration of brain tissues)—can be performed in a standardized
 setting. This consistency is critical for reproducibility and comparison across different studies.
 
+Dopo Feature-extraction usare Neuro-Harmonize(Pacchetto Python).
+
 
 Due modi di classificare:
-- ROI Based --> RandomForest vs MLP;
-- Voxel-Based --> CNN:  U-net modificata vs ResNet;
+- ROI Based (Biased) --> RandomForest vs MLP;
+- Voxel-Based --> CNN:  U-net modificata vs ResNet (Saliency map per Xai) (Modificare quella Cnn da articolo, oppure riferimento dal sito PyTorch);
 
 Nota bene: Se non facciamo in tempo, la prima cosa da abbandonare è la ResNet (se non ne troviamo una già fatta)
 
