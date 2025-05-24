@@ -3,29 +3,27 @@ DOI: 10.1111/jon.12163
 
 Librerie: Tenforflow/Keras, PyThorch
 
-Classfiers: SVM, DecisionTree (RandomForest, XGBoost), CNN, AlexNet, ResNet
-
-AD vs CN 
-Confrontare diversi modelli di machine learning:
-Due punti di partenza:
-- Utilizzare l'atlante neuromorfometrico (SPM package) per segmentare le regioni di interesse
-- Analisi voxel-wise 
-
-The algorithms (whether intensity-based for voxel-wise or segmentation-based for region-wise) have to
-compute a transformation that warps each subject’s brain anatomy to the MNI coordinate system.
-Once all images are registered into the MNI space, subsequent analyses—such as statistical comparisons or voxel-based 
-morphometry (statistical comparison of the the local concentration of brain tissues)—can be performed in a standardized
-setting. This consistency is critical for reproducibility and comparison across different studies.
-
-Dopo Feature-extraction usare Neuro-Harmonize(Pacchetto Python).
-
-
-Due modi di classificare:
-- ROI Based --> RandomForest vs MLP;
-- Voxel-Based --> CNN: DenseNet + RNN (approccio random per feature extraction) vs ResNet (valutare se mantenere i layers tra i blocchi BatchNorm e Conv3D);
-
 
 Check the .gitattributes file in the GitHub repo in the case we want to use MatLab (pg. 8 Lecture2)
+
+
+PIPELINE:
+
+- Quello che abbiamo: GM segmented, smoothed and normalized in SPM 
+
+- Modelli: SVM e EfficientNet
+
+- Interpretability: SHAP, LIME e GradCAM
+
+
+Voxel-based -> SVM, EfficientNet -> ROI for the aspects -> Interpretability (SHAP, LIME, GradCAM)
+
+- Partendo dalle GM segmented, modulated and smoothed che ci ha fornito, vogliamo definire gli aspetti (come definito nell'articolo) dalle ROI utilizzando l'atlante Neuromorfometrico di SPM (o il LONI che ci ha fornito lei)
+- Vorremmo addestrare due modelli (SVM e EfficientNet) con un approccio voxel-based
+- Utilizzare SHAP e LIME, che consentono di interpretare gli output di SVM grazie agli aspetti, e GradCAM per l'interpretazione dell'EfficientNet con l'heatmap
+- Inoltre vorremmo utilizzare il dataset MCI come blind test set per valutare entrambi i modelli ed interpretarli
+
+
 
 
 
