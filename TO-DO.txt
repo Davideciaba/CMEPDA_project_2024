@@ -1,4 +1,4 @@
-+Article: Retico et al, Predictive Models Based on Support Vector Machines: Whole-Brain versus Regional Analysis of Structural MRI in the Alzheimer's Disease. J Neuroimaging. 2015 Jul-Aug;25(4):552-63
+Article: Retico et al, Predictive Models Based on Support Vector Machines: Whole-Brain versus Regional Analysis of Structural MRI in the Alzheimer's Disease. J Neuroimaging. 2015 Jul-Aug;25(4):552-63
 DOI: 10.1111/jon.12163
 Article: Bloch et al., Systematic comparison of 3D Deep learning and classical machine learning
 explanations for Alzheimer’s Disease detection
@@ -53,7 +53,7 @@ EfficientNet:
 
 
 Interpretation:
-- Associazione degli aspetti alle ROI di SPM calcolando la percentuale di cluster-aspetto occupata dalla ROI
+- Associazione degli aspetti alle ROI di SPM tramite atlante calcolando la percentuale di cluster-aspetto occupata dalla ROI
 - Correlazione tra gli aspetti dei due modelli
 - Interpretazione delle due mappe degli aspetti
 
