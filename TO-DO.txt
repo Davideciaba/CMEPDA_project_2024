@@ -1,7 +1,9 @@
 Article: Retico et al, Predictive Models Based on Support Vector Machines: Whole-Brain versus Regional Analysis of Structural MRI in the Alzheimer's Disease. J Neuroimaging. 2015 Jul-Aug;25(4):552-63
 DOI: 10.1111/jon.12163
+Article: Bloch et al., Systematic comparison of 3D Deep learning and classical machine learning
+explanations for Alzheimer’s Disease detection
 
-Librerie: Tenforflow/Keras, PyThorch
+Librerie: PyThorch, Monai, sklearn
 
 
 Check the .gitattributes file in the GitHub repo in the case we want to use MatLab (pg. 8 Lecture2)
@@ -9,27 +11,51 @@ Check the .gitattributes file in the GitHub repo in the case we want to use MatL
 
 PIPELINE:
 
-- Quello che abbiamo: GM segmented, smoothed and normalized in SPM 
+- Quello che abbiamo: GM segmented, smoothed and modulated in SPM 
 
-- Modelli: SVM e EfficientNet
+- Modelli: SVM lineare e EfficientNet
 
-- Interpretability: SHAP, LIME e GradCAM
-
-
-Voxel-based -> SVM, EfficientNet -> ROI for the aspects -> Interpretability (SHAP, LIME, GradCAM)
-
-- Partendo dalle GM segmented, modulated and smoothed che ci ha fornito, vogliamo definire gli aspetti (come definito nell'articolo) dalle ROI utilizzando l'atlante Neuromorfometrico di SPM (o il LONI che ci ha fornito lei)
-- Vorremmo addestrare due modelli (SVM e EfficientNet) con un approccio voxel-based
-- Utilizzare SHAP e LIME, che consentono di interpretare gli output di SVM grazie agli aspetti, e GradCAM per l'interpretazione dell'EfficientNet con l'heatmap
-- Inoltre vorremmo utilizzare il dataset MCI come blind test set per valutare entrambi i modelli ed interpretarli
+- Interpretability: GradCAM e aggregazione in aspects
 
 
+Voxel-based -> SVM, EfficientNet -> aspects -> Interpretability 
 
 
+Preprocessing: 
+- Creazione maschera per intensità GM > 0 
+- Vettorializzazione (soggetto x GM voxels)
+- Normalizzazione dei voxels con TIV_i / max(TIV) e aggiunta labels y
+- Hold Out split: 80% training + validation set e 20% test set
+- Aggregazione in aspects dei voxels mediante correlazione di Spearman e clustering gerarchico (su training + validation set) -> aspect labels per ogni voxel
 
 
+SVM lineare:
+- LOOCV (o 20-fold CV) su training + validation set (con standardizzazione su training set)
+- Estrazione pesi per ogni soggetto/fold (media e deviazione standard)
+- Best model
+- Standardizzazione su training + validation set e retraining
+- Evaluation su Hold-Out test set
+- Estrazione pesi finali 
+- Aggregazione dei pesi in aspetti tramite somma dei pesi associati ai voxels appartenenti a quell'aspetto
+- Creazione mappa degli aspetti 
 
 
+EfficientNet:
+- Reshape dei vettori di voxels in immagini 3D 
+- LOOCV (o 20-fold CV) su training + validation set (con standardizzazione su training set ed eventuale retraining)
+- GradCAM su validation interno -> heatmap per ogni soggetto/fold
+- Best model
+- Standardizzazione su training + validation set e retraining
+- Evaluation e GradCAM su Hold-Out test set -> heatmap per ogni soggetto hold-out
+- Appiattimento heatmaps su maschera GM e aggregazione valore GradCAM in aspetti tramite media per ogni soggetto (normalizzazione rispetto al volume del cluster)
+- Calcolo differenza tra le medie dei valori GradCAM per i soggetti AD e CTRL
+- Creazione mappa degli aspetti
+
+
+Interpretation:
+- Associazione degli aspetti alle ROI di SPM tramite atlante calcolando la percentuale di cluster-aspetto occupata dalla ROI
+- Correlazione tra gli aspetti dei due modelli
+- Interpretazione delle due mappe degli aspetti
 
 
 
