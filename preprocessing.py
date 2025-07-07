@@ -458,8 +458,8 @@ if __name__ == "__main__":
     import glob
     
     # Percorsi alle cartelle (sostituisci con i tuoi percorsi effettivi)
-    ctrl_folder = "C:/Tancredi/Libri/Fisica/Magistrale/Computing_methods/MATLAB/Dataset/CTRL_s3"  # Cartella con 189 file CTRL
-    ad_folder = "C:/Tancredi/Libri/Fisica/Magistrale/Computing_methods/MATLAB/Dataset/AD_s3"      # Cartella con 144 file AD
+    ctrl_folder = "./CMEPDA_project_2024/AD_CTRL/CTRL_s3"  # Cartella con 189 file CTRL
+    ad_folder = "./CMEPDA_project_2024/AD_CTRL/AD_s3"      # Cartella con 144 file AD
     
     # Carica liste di file
     ctrl_files = sorted(glob.glob(os.path.join(ctrl_folder, "*.nii*")))
@@ -473,7 +473,7 @@ if __name__ == "__main__":
     all_labels = [0] * len(ctrl_files) + [1] * len(ad_files)  # 0=CTRL, 1=AD
     
     # TIV values - carica dalla sesta colonna del CSV
-    tiv_csv_path = "C:/Tancredi/Libri/Fisica/Magistrale/Computing_methods/Progetto/CMEPDA_project_2024/covariateADCTRLsexAgeTIV.csv"  # Sostituisci con il percorso del tuo CSV
+    tiv_csv_path = "./CMEPDA_project_2024/covariateADCTRLsexAgeTIV.csv"  # Sostituisci con il percorso del tuo CSV
     
     # Inizializza preprocessor per usare la funzione di caricamento TIV
     temp_preprocessor = NeuroimagingPreprocessor()
