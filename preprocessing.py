@@ -208,7 +208,133 @@ class NeuroimagingPreprocessor:
         
         return self.aspect_labels
     
-    def get_aspect_info(self) -> Dict:
+    def load_data_from_csv(self, csv_path: str, ctrl_folder: str, ad_folder: str, 
+                          subject_column: int = 0, group_column: int = 1, tiv_column: int = 5,
+                          file_extension: str = ".nii.gz") -> Tuple[List[str], List[int], List[float]]:
+        """
+        Carica dati dal CSV con associazione soggetti-gruppi-TIV.
+        
+        Args:
+            csv_path: Percorso al file CSV
+            ctrl_folder: Cartella con file CTRL
+            ad_folder: Cartella con file AD  
+            subject_column: Indice colonna con ID soggetto (default: 0)
+            group_column: Indice colonna con gruppo CTRL/AD (default: 1)
+            tiv_column: Indice colonna con valori TIV (default: 5)
+            file_extension: Estensione file immagini (default: ".nii.gz")
+            
+        Returns:
+            Tuple con (lista_percorsi_immagini, lista_labels, lista_tiv)
+        """
+        print(f"Caricamento dati da CSV: {csv_path}")
+        
+        try:
+            # Carica CSV
+            df = pd.read_csv(csv_path)
+            print(f"CSV caricato: {df.shape[0]} righe, {df.shape[1]} colonne")
+            
+            # Verifica colonne necessarie
+            required_cols = max(subject_column, group_column, tiv_column) + 1
+            if df.shape[1] < required_cols:
+                raise ValueError(f"CSV ha solo {df.shape[1]} colonne, servono almeno {required_cols}")
+            
+            # Estrai dati
+            subjects = df.iloc[:, subject_column].astype(str).tolist()
+            groups = df.iloc[:, group_column].astype(str).tolist()
+            tiv_values = df.iloc[:, tiv_column].astype(float).tolist()
+            
+            print(f"Soggetti estratti: {len(subjects)}")
+            print(f"Gruppi unici: {set(groups)}")
+            print(f"Range TIV: {min(tiv_values):.2f} - {max(tiv_values):.2f}")
+            
+            # Costruisci percorsi e labels
+            gm_images = []
+            labels = []
+            final_tiv_values = []
+            
+            missing_files = []
+            
+            for i, (subject, group, tiv) in enumerate(zip(subjects, groups, tiv_values)):
+                # Determina cartella e label
+                if group.upper() in ['CTRL', 'CONTROL', 'CN', '0']:
+                    folder = ctrl_folder
+                    label = 0
+                elif group.upper() in ['AD', 'ALZHEIMER', 'DEMENTIA', '1']:
+                    folder = ad_folder  
+                    label = 1
+                else:
+                    print(f"Attenzione: gruppo non riconosciuto '{group}' per soggetto {subject}")
+                    continue
+                
+                # Costruisci percorso file
+                filename = f"{subject}{file_extension}"
+                filepath = os.path.join(folder, filename)
+                
+                # Verifica esistenza file
+                if os.path.exists(filepath):
+                    gm_images.append(filepath)
+                    labels.append(label)
+                    final_tiv_values.append(tiv)
+                else:
+                    missing_files.append(filepath)
+            
+            # Report finale
+            print(f"\n=== REPORT CARICAMENTO ===")
+            print(f"File trovati: {len(gm_images)}")
+            print(f"CTRL: {labels.count(0)} soggetti")
+            print(f"AD: {labels.count(1)} soggetti")
+            print(f"File mancanti: {len(missing_files)}")
+            
+            if missing_files:
+                print("\nPrimi 5 file mancanti:")
+                for f in missing_files[:5]:
+                    print(f"  - {f}")
+                if len(missing_files) > 5:
+                    print(f"  ... e altri {len(missing_files)-5}")
+            
+            print(f"TIV finale - Media: {np.mean(final_tiv_values):.2f} ± {np.std(final_tiv_values):.2f}")
+            
+            return gm_images, labels, final_tiv_values
+            
+        except Exception as e:
+            print(f"Errore nel caricamento dal CSV: {e}")
+            raise
+
+    def load_tiv_from_csv(self, csv_path: str, tiv_column: int = 5) -> List[float]:
+        """
+        Carica i valori TIV dalla colonna specificata di un file CSV.
+        DEPRECATA: Usa load_data_from_csv() per gestione completa.
+        
+        Args:
+            csv_path: Percorso al file CSV
+            tiv_column: Indice della colonna TIV (default: 5 per la sesta colonna)
+            
+        Returns:
+            Lista dei valori TIV
+        """
+        print(f"Caricamento valori TIV da {csv_path}...")
+        print("NOTA: Considera l'uso di load_data_from_csv() per gestione completa")
+        
+        try:
+            # Carica CSV
+            df = pd.read_csv(csv_path)
+            print(f"CSV caricato: {df.shape[0]} righe, {df.shape[1]} colonne")
+            
+            # Estrai colonna TIV (sesta colonna = indice 5)
+            if df.shape[1] <= tiv_column:
+                raise ValueError(f"Il CSV ha solo {df.shape[1]} colonne, impossibile accedere alla colonna {tiv_column+1}")
+            
+            tiv_values = df.iloc[:, tiv_column].tolist()
+            
+            print(f"Valori TIV estratti: {len(tiv_values)}")
+            print(f"Range TIV: {min(tiv_values):.2f} - {max(tiv_values):.2f}")
+            print(f"Media TIV: {np.mean(tiv_values):.2f} ± {np.std(tiv_values):.2f}")
+            
+            return tiv_values
+            
+        except Exception as e:
+            print(f"Errore nel caricamento del CSV: {e}")
+            raise
         """
         Restituisce informazioni sugli aspects creati.
         
@@ -277,6 +403,10 @@ def run_preprocessing_pipeline(gm_images: List[str], labels: List[int], tiv_valu
     """
     print("=== AVVIO PIPELINE PREPROCESSING ===")
     
+    # Verifica coerenza dati
+    if not (len(gm_images) == len(labels) == len(tiv_values)):
+        raise ValueError(f"Lunghezze diverse: immagini={len(gm_images)}, labels={len(labels)}, TIV={len(tiv_values)}")
+    
     # Inizializza preprocessor
     preprocessor = NeuroimagingPreprocessor()
     
@@ -328,8 +458,8 @@ if __name__ == "__main__":
     import glob
     
     # Percorsi alle cartelle (sostituisci con i tuoi percorsi effettivi)
-    ctrl_folder = "CTRL_s3"  # Cartella con 189 file CTRL
-    ad_folder = "AD_s3"      # Cartella con 144 file AD
+    ctrl_folder = "C:/Tancredi/Libri/Fisica/Magistrale/Computing_methods/MATLAB/Dataset/CTRL_s3"  # Cartella con 189 file CTRL
+    ad_folder = "C:/Tancredi/Libri/Fisica/Magistrale/Computing_methods/MATLAB/Dataset/AD_s3"      # Cartella con 144 file AD
     
     # Carica liste di file
     ctrl_files = sorted(glob.glob(os.path.join(ctrl_folder, "*.nii*")))
@@ -342,13 +472,17 @@ if __name__ == "__main__":
     all_gm_images = ctrl_files + ad_files
     all_labels = [0] * len(ctrl_files) + [1] * len(ad_files)  # 0=CTRL, 1=AD
     
-    # TIV values - sostituisci con i tuoi valori reali
-    # Opzione 1: Se hai un file CSV con i valori TIV
-    # tiv_df = pd.read_csv("path/to/tiv_values.csv")
-    # all_tiv_values = tiv_df['tiv'].tolist()
+    # TIV values - carica dalla sesta colonna del CSV
+    tiv_csv_path = "C:/Tancredi/Libri/Fisica/Magistrale/Computing_methods/Progetto/CMEPDA_project_2024/covariateADCTRLsexAgeTIV.csv"  # Sostituisci con il percorso del tuo CSV
     
-    # Opzione 2: Valori simulati per test (DA SOSTITUIRE)
-    all_tiv_values = np.random.normal(1500, 200, len(all_gm_images)).tolist()
+    # Inizializza preprocessor per usare la funzione di caricamento TIV
+    temp_preprocessor = NeuroimagingPreprocessor()
+    
+    # DECOMMENTARE per caricare i valori TIV reali:
+    all_tiv_values = temp_preprocessor.load_tiv_from_csv(tiv_csv_path, tiv_column=5)
+    
+    # Valori simulati per test (DA SOSTITUIRE con la riga sopra)
+    #all_tiv_values = np.random.normal(1500, 200, len(all_gm_images)).tolist()
     
     print(f"Dataset preparato:")
     print(f"- Immagini GM: {len(all_gm_images)}")
@@ -357,32 +491,18 @@ if __name__ == "__main__":
     
     # Esegui preprocessing
     print("\n=== AVVIO PREPROCESSING ===")
+    #DECOMMENTARE le righe seguenti per eseguire con dati reali
+    results = run_preprocessing_pipeline(
+                gm_images=all_gm_images,
+                 labels=all_labels,
+                 tiv_values=all_tiv_values,
+                 n_aspects=100,
+                 output_dir='preprocessing_results_333subjects'
+                )
     
-    # DECOMMENTARE PER ESEGUIRE CON DATI REALI:
-    # results = run_preprocessing_pipeline(
-    #     gm_images=all_gm_images,
-    #     labels=all_labels,
-    #     tiv_values=all_tiv_values,
-    #     n_aspects=100,
-    #     output_dir="preprocessing_results_333subjects"
-    # )
+    # Lo split viene gestito automaticamente dalla pipeline!
+    # La funzione run_preprocessing_pipeline() chiamerà hold_out_split()
+    # che farà la divisione stratificata 80/20 mantenendo le proporzioni
     
-    # Previsioni split con i tuoi numeri:
-    print("\n=== PREVISIONI SPLIT ===")
-    n_total = 333
-    n_ctrl = 189
-    n_ad = 144
-    
-    # Training + Validation (80%)
-    n_train_val = int(n_total * 0.8)  # 266 soggetti
-    n_train_val_ctrl = int(n_ctrl * 0.8)  # 151 CTRL
-    n_train_val_ad = int(n_ad * 0.8)  # 115 AD
-    
-    # Test (20%)
-    n_test = n_total - n_train_val  # 67 soggetti
-    n_test_ctrl = n_ctrl - n_train_val_ctrl  # 38 CTRL
-    n_test_ad = n_ad - n_train_val_ad  # 29 AD
-    
-    print(f"Training+Validation: {n_train_val} soggetti ({n_train_val_ctrl} CTRL, {n_train_val_ad} AD)")
-    print(f"Test: {n_test} soggetti ({n_test_ctrl} CTRL, {n_test_ad} AD)")
-    print(f"Proporzioni mantenute: {n_train_val_ctrl/n_train_val:.3f} CTRL, {n_train_val_ad/n_train_val:.3f} AD")
+    print("\nNOTA: Lo split training/test viene gestito automaticamente dalla pipeline")
+    print("con stratificazione per mantenere le proporzioni CTRL/AD in entrambi i set.")
