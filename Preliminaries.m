@@ -221,13 +221,14 @@ logger.info('Step 1.4: Creating labels and saving processed data...')
 % ---Creating labels ---
 logger.info('Creating labels...')
 % Create labels (1 = AD, 0 = CTRL) based on file order
-y_all = [ones(N_AD, 1); zeros(N_CTRL, 1)];
+y_all = zeros(N_AD + N_CTRL, 1);
+y_all(1:N_AD) = 1;
 try
     % Get the directory of the currently running script
     script_dir = fileparts(mfilename('fullpath'));
     % Construct the full path for the output file
-    output_path = fullfile(script_dir, 'preliminari.mat');
-    % Save the variables to the specified path.ù
+    output_path = fullfile(script_dir, 'preliminaries_.mat');
+    % Save the variables to the specified path.
     save(output_path, 'X_raw', 'y_all', 'mask', 'voxelIdx', 'M', 'N', '-v7.3');
     logger.success('File saved successfully to %s', output_path);
 catch ME
@@ -247,7 +248,7 @@ function pool = safe_parpool(logger)
     pool = []; % Default value (serial)
     try
         % Check if the Parallel Computing Toolbox is installed 
-        if ~isempty(ver('parallel'))
+        if isempty(ver('parallel'))
             logger.warn('Parallel Computing Toolbox not found. Continuing in serial mode.');
             return; 
         end
@@ -276,7 +277,7 @@ end
 function setup_file_logging(logger)
     % Ask the user if they want to create a log file
     default_answer = 'y';
-    prompt_color = '_*blue';
+    prompt_color = '_blue';
     prompt_text = sprintf('Do you want to create a log file? [%s]:', default_answer);
     
     % Use cprintf for a colored prompt if it's on the path
@@ -313,14 +314,16 @@ function use_spm = check_spm_availability(logger)
     if spm_in_path
         logger.info('SPM (%s) found in MATLAB path.', spm('Ver'));
         default_answer = 'y';
+        prompt_text = sprintf('Do you want to use SPM (%s) functions? [%s]:', spm('Ver'), default_answer);
     else
         logger.warn('SPM not found in MATLAB path.');
         default_answer = 'n';
+        prompt_text = sprintf('Do you want to use SPM functions? [%s]:', default_answer);
     end
     
     % Ask the user
-    prompt_color = '_*blue';
-    prompt_text = sprintf('Do you want to use SPM (%s) functions? [%s]:', spm('Ver'), default_answer);
+    prompt_color = '_blue';
+    
     
     % Use cprintf for a colored prompt if it's available
     if ~isempty(which('cprintf'))
@@ -339,7 +342,7 @@ function use_spm = check_spm_availability(logger)
     % Handle the case where the user wants SPM, but it's not available
     use_spm = strcmpi(user_input, 'y') || strcmpi(user_input, 'yes');
     if use_spm && ~spm_in_path
-        logger.error('SPM required but not found. Add SPM to your MATLAB path.');
+        logger.error('SPM was requested but not found. Continuing with standard MATLAB functions.');
         use_spm = false; % Forces to false to avoid errors
         return;
     end

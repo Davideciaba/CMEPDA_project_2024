@@ -105,7 +105,9 @@ classdef Logger < handle
             else
                 message_in = msg;
             end
-
+            
+            % Substitute '\' with '\\' and force cprinf to print \
+            message_in = strrep(message_in, '\', '\\'); %
             
             % Retrieves info where the log call originated
             caller = obj.getCallerInfo();
