@@ -8,24 +8,26 @@
 
 from loguru import logger
 import numpy as np
-from scipy.io import loadmat
+import h5py
 from sklearn.model_selection import train_test_split
 import os
 
 # --- 1. Caricamento dei dati preprocessati ---
 # Si assume che il file .mat sia stato generato dalla fase "Preliminaries".
-mat_file_path = 'preliminaries_output.mat'
+mat_file_path = '../CMEPDA_Project_2024/MATLAB_preliminaries/preliminaries_output.mat'
 print(f'Caricamento dei dati da "{mat_file_path}"...')
 
 if not os.path.exists(mat_file_path):
     raise FileNotFoundError(f'File "{mat_file_path}" non trovato. Eseguire prima lo script MATLAB Preliminaries.')
 
-# Carica il file .mat. I dati sono in un dizionario.
-mat_data = loadmat(mat_file_path)
-X_raw = mat_data['X_raw']
-# y_all viene caricato come un array 2D (N, 1), lo trasformiamo in 1D (N,).
-y_all = mat_data['y_all'].ravel()
-
+# Use h5py to read the v7.3 .mat file
+with h5py.File(mat_file_path, 'r') as f:
+    # Data is stored as datasets. Access them by name.
+    # We must transpose (.T) the arrays to match the (samples, features) shape
+    # expected by scikit-learn, due to MATLAB's column-major storage.
+    X_raw = f['X_raw'][()].T 
+    # Also transpose y_all and then flatten it to a 1D array
+    y_all = f['y_all'][()].T.ravel()
 print('Dati caricati con successo.')
 print(f'Dimensioni X_raw: {X_raw.shape}')
 print(f'Dimensioni y_all: {y_all.shape}')
