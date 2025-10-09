@@ -73,7 +73,7 @@ logger.info('Avvio della standardizzazione (fit su X_rem, transform su entrambi 
 scaler = StandardScaler()
 
 # Addestra lo scaler e trasforma X_rem
-X_rem_scaled = scaler.fit_transform(X_rem)
+X_rem_scaled = scaler.fit_transform(X_rem) #Controllare tdnn quando usare StandardScaler / C
 
 # Usa lo scaler GIA' ADDESTRATO per trasformare X_hold_test
 X_hold_test_scaled = scaler.transform(X_hold_test)
