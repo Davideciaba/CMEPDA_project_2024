@@ -1,5 +1,21 @@
 classdef Logger < handle
-    % A logging class for MATLAB.
+% LOGGER A logging class for MATLAB.
+%   Supports multiple log levels, console and file outputs,
+%   colored output (if cprintf is available in MATLAB or with
+%   ANSI code in the terminal), and contextual data.
+%
+%   Key Features:
+%   - Log Levels: Supports TRACE, DEBUG, INFO, SUCCESS, WARNING, ERROR,
+%     and CRITICAL for granular control over the output.
+%   - Multiple Handlers: Configure output to the console, files, or both
+%     simultaneously, each with its own filtering level.
+%   - Colored Output: Provides colored logs in the MATLAB Desktop (requires
+%     'cprintf' from the File Exchange) and automatically uses ANSI color
+%     codes when running in a terminal.
+%   - File Rotation: Automatically manages the size of log files,
+%     archiving old ones to prevent them from growing indefinitely.
+%   - Contextual Data: Adds metadata (e.g., user ID, session name) to all
+%     log messages for advanced tracking.
  
     properties
         name = 'root';
@@ -16,6 +32,20 @@ classdef Logger < handle
         COLORS = containers.Map(...
             {'TRACE', 'DEBUG', 'INFO', 'SUCCESS', 'WARNING', 'ERROR', 'CRITICAL'},...
             {'black', 'blue', '_green', '*green', '_yellow', 'red', '*red'});
+        
+        % Maps log levels to ANSI color codes for terminal output
+        ANSI_COLORS = containers.Map(...
+            {'TRACE', 'DEBUG', 'INFO', 'SUCCESS', 'WARNING', 'ERROR', 'CRITICAL'},...
+            {...
+                '\x1b[90m', % 'black' 
+                '\x1b[34m', % 'blue'
+                '\x1b[4;32m', % '_green'
+                '\x1b[1;32m', % '*green'
+                '\x1b[4;33m', % '_yellow'
+                '\x1b[31m', % 'red'
+                '\x1b[1;31m' % '*red'
+            });
+        RESET_COLOR = '\x1b[0m'; % ANSI code to reset the color
     end
 
     methods
@@ -137,13 +167,23 @@ classdef Logger < handle
                       levelName, caller, message_out);
                 
                 if strcmp(sink.type, 'console')
-                    
-                    % Use cprintf only if use_colors is true and cprintf is available 
-                    if sink.use_colors && ~isempty(which('cprintf'))
-                        color = obj.COLORS(levelName);
-                        % Substitute '%' with '%%' and force cprinf to print %
-                        out_for_cprintf = strrep(out, '%', '%%');
-                        cprintf(color, out_for_cprintf);
+
+                    if sink.use_colors
+                        % Check if we are in MATLAB desktop environment
+                        isDesktop = usejava('desktop');
+
+                        % If we are in the desktop and cprintf is available
+                        if isDesktop && ~isempty(which('cprintf'))
+                            color = obj.COLORS(levelName);
+                            % Substitute '%' with '%%' and force cprinf to print %
+                            out_for_cprintf = strrep(out, '%', '%%');
+                            cprintf(color, out_for_cprintf);
+
+                        % If we are in a terminal
+                        else
+                            color = obj.ANSI_COLORS(levelName);
+                            fprintf('%s%s%s', color, out, obj.RESET_COLOR);
+                        end
     
                     else
                         % Print without colors
