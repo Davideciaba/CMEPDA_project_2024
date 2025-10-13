@@ -1,148 +1,196 @@
-# %% STEP 7: SVM ANALYSIS (LOOCV, FINAL MODEL, AND MAPPING)
+# %% STEP 7: SVM ANALYSIS WITH PYTORCH (LOOCV, FINAL MODEL, AND MAPPING)
 # Author: Gemini
-# Date: 09/10/2025
-# --------------------------------------------------------------------------
-# Questo script implementa l'intera pipeline di analisi per la SVM lineare
-# come descritto nel documento di pipeline.
-# SEZIONE 4: Esegue una LOOCV interna sul "remaining set" (80%) per il tuning.
-# SEZIONE 5: Addestra il modello finale e lo valuta sul "hold-out set" (20%).
-# SEZIONE 6: Aggrega i pesi in "aspetti" e crea una mappa NIfTI.
+# Date: 13/10/2025
+# (versione con grafici di performance)
 # --------------------------------------------------------------------------
 
 import sys
 import h5py
 import numpy as np
 from scipy.stats import mode
-from sklearn.svm import SVC
 from sklearn.preprocessing import StandardScaler
-from sklearn.metrics import accuracy_score, roc_auc_score
+from sklearn.metrics import accuracy_score, roc_auc_score, confusion_matrix, roc_curve
 from loguru import logger
 from tqdm import tqdm
-import joblib
+import torch
+import torch.nn as nn
+import torch.optim as optim
+import matplotlib.pyplot as plt
+import seaborn as sns
 
-# Assicurati di aver installato NiBabel: pip install nibabel
 try:
     import nibabel as nib
 except ImportError:
     logger.critical("Libreria NiBabel non trovata. Installala con: pip install nibabel")
     sys.exit(1)
 
-# --- 0. Configurazione del Logger ---
+# --- 0. Configurazione del Logger e Dispositivo PyTorch ---
 logger.remove()
 logger.add(sys.stdout, format="<green>{time:YYYY-MM-DD HH:mm:ss}</green> | <level>{level: <8}</level> | <cyan>{name}</cyan>:<cyan>{function}</cyan>:<cyan>{line}</cyan> - <level>{message}</level>")
+DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+logger.info(f"Dispositivo PyTorch in uso: {DEVICE}")
 
 # --- 1. Definizione dei Percorsi dei File di Input ---
-# NOTA: Questo script presuppone che i file .mat e .npz degli step precedenti siano disponibili.
+split_data_file = 'split_data_and_indices.npz'
 mat_file_path = '../CMEPDA_Project_2024/MATLAB_preliminaries/preliminaries_output.mat'
-# Assumiamo di avere i dati splittati ma non ancora scalati, come da logica del documento
-split_data_file = 'split_unscaled_data.npz' # !IMPORTANTE: questo file deve contenere X_rem e X_hold_test non scalati
 clustering_results_file = 'hierarchical_clustering_results.npz'
-# Usiamo un'immagine di riferimento per salvare il file .nii finale
-reference_nii_path = '/data/GM_maps/wc1subj001.nii' # Sostituisci con un percorso valido
+# Assicurati che questo percorso punti a un file NIfTI di riferimento valido, es. un template MNI
+reference_nii_path = 'C:/spm12/canonical/avg152T1.nii' # ESEMPIO: Sostituisci con un percorso valido
 
 # --- 2. Caricamento Dati ---
 logger.info("Caricamento di tutti i dati necessari dai file di preprocessing...")
 try:
-    # Carica i dati non scalati e gli indici
     with np.load(split_data_file) as data:
-        X_rem = data['X_rem']
-        y_rem = data['y_rem']
-        X_hold_test = data['X_hold_test']
-        y_hold_test = data['y_hold_test']
-    
-    # Carica i risultati del clustering per l'aggregazione finale
+        X_rem, y_rem = data['X_rem'], data['y_rem']
+        X_hold_test, y_hold_test = data['X_hold_test'], data['y_hold_test']
     with np.load(clustering_results_file) as data:
         cluster_labels_voxel = data['cluster_labels_voxel']
         K = int(data['num_clusters'])
-
-    # Carica metadati per la ricostruzione della mappa 3D
     with h5py.File(mat_file_path, 'r') as f:
         mask3D = f['mask'][()]
         voxelIdx = f['voxelIdx'][()].ravel().astype(int) - 1 # 0-based
-
     n_rem, M = X_rem.shape
     logger.success("Tutti i file sono stati caricati con successo.")
-
 except FileNotFoundError as e:
     logger.critical(f"File di input non trovato: {e}. Assicurati di aver eseguito tutti gli script precedenti.")
     sys.exit(1)
 
+
+# --- 3. Modello SVM e Funzione di Training con PyTorch ---
+class SVM(nn.Module):
+    def __init__(self, input_dim):
+        super(SVM, self).__init__()
+        self.linear = nn.Linear(input_dim, 1)
+    def forward(self, x):
+        return self.linear(x)
+
+def train_svm(model, X_train, y_train, c_value, lr=0.001, epochs=100):
+    weight_decay = 1 / (c_value * len(y_train))
+    optimizer = optim.Adam(model.parameters(), lr=lr, weight_decay=weight_decay)
+    y_train_hinge = torch.tensor(np.where(y_train == 0, -1, 1), dtype=torch.float32).to(DEVICE).unsqueeze(1)
+    X_train_tensor = torch.tensor(X_train, dtype=torch.float32).to(DEVICE)
+    
+    loss_history = [] # Per salvare la loss ad ogni epoca
+    for _ in range(epochs):
+        optimizer.zero_grad()
+        outputs = model(X_train_tensor)
+        loss = torch.mean(torch.clamp(1 - y_train_hinge * outputs, min=0))
+        loss.backward()
+        optimizer.step()
+        loss_history.append(loss.item())
+    return model, loss_history # Restituisce anche la cronologia della loss
+
 # ==========================================================================
-# SEZIONE 4: LOOCV INTERNO SUL REMAINING SET (80%)
+# SEZIONE 4: LOOCV INTERNO SUL REMAINING SET (80%) CON PYTORCH
 # ==========================================================================
 logger.info("INIZIO SEZIONE 4: Esecuzione del LOOCV interno per il tuning di C...")
-
 W_all_rem = np.zeros((n_rem, M))
 bestC_int_all = np.zeros(n_rem)
 C_candidates = [0.01, 0.1, 1, 10]
 
-for k in tqdm(range(n_rem), desc="SVM Internal LOOCV"):
-    
-    # Definizione di Train e Validation Interno
+for k in tqdm(range(n_rem), desc="SVM (PyTorch) Internal LOOCV"):
     val_idx = k
     train_indices = np.delete(np.arange(n_rem), k)
+    X_train_int_raw, y_train_int = X_rem[train_indices, :], y_rem[train_indices]
+    X_val_int_raw, y_val_int = X_rem[val_idx, :].reshape(1, -1), y_rem[val_idx]
 
-    X_train_int_raw = X_rem[train_indices, :]
-    y_train_int = y_rem[train_indices]
-    X_val_int_raw = X_rem[val_idx, :].reshape(1, -1)
-    y_val_int = y_rem[val_idx]
-
-    # Standardizzazione basata SOLO sul train interno
     scaler_int = StandardScaler()
     X_train_int_std = scaler_int.fit_transform(X_train_int_raw)
     X_val_int_std = scaler_int.transform(X_val_int_raw)
     
-    # Tuning di C
     best_c_int, best_val_acc_int = C_candidates[0], -1
     for c_value in C_candidates:
-        svm_c = SVC(kernel='linear', C=c_value, probability=True, random_state=42)
-        svm_c.fit(X_train_int_std, y_train_int)
-        val_acc = svm_c.score(X_val_int_std, [y_val_int])
+        svm_c = SVM(input_dim=M).to(DEVICE)
+        svm_c, _ = train_svm(svm_c, X_train_int_std, y_train_int, c_value)
+        with torch.no_grad():
+            val_tensor = torch.tensor(X_val_int_std, dtype=torch.float32).to(DEVICE)
+            output = svm_c(val_tensor).item()
+            pred = 1 if output >= 0 else 0
+            val_acc = 1 if pred == y_val_int else 0
         if val_acc > best_val_acc_int:
             best_val_acc_int = val_acc
             best_c_int = c_value
     bestC_int_all[k] = best_c_int
     
-    # Rifit su Train + Validation interno con il C ottimale
     X_trval_int_std = np.vstack([X_train_int_std, X_val_int_std])
     y_trval_int = np.append(y_train_int, y_val_int)
     
-    svm_int_final = SVC(kernel='linear', C=best_c_int, probability=True, random_state=42)
-    svm_int_final.fit(X_trval_int_std, y_trval_int)
-    
-    W_all_rem[k, :] = svm_int_final.coef_.flatten()
-
+    svm_int_final = SVM(input_dim=M).to(DEVICE)
+    svm_int_final, _ = train_svm(svm_int_final, X_trval_int_std, y_trval_int, best_c_int)
+    W_all_rem[k, :] = svm_int_final.linear.weight.data.cpu().numpy().flatten()
 logger.success("SEZIONE 4 COMPLETATA: LOOCV interno terminato.")
 
 # ==========================================================================
 # SEZIONE 5: MODELLO FINALE E VALUTAZIONE SULL'HOLD-OUT SET (20%)
 # ==========================================================================
 logger.info("INIZIO SEZIONE 5: Addestramento del modello finale e valutazione.")
-
-# 5.1.1 Scelta di C_final (la moda dei C trovati)
 C_final = mode(bestC_int_all, keepdims=True).mode[0]
-logger.info(f"Iperparametro finale scelto (moda dei C trovati): C = {C_final}")
+logger.info(f"Iperparametro finale scelto: C = {C_final}")
 
-# 5.1.2 Standardizzazione finale (fit su tutto X_rem)
-logger.info("Standardizzazione finale: fit su tutto il remaining set (80%), transform su entrambi.")
 scaler_final = StandardScaler()
 X_rem_std = scaler_final.fit_transform(X_rem)
 X_hold_std = scaler_final.transform(X_hold_test)
 
-# 5.1.3 Addestramento SVM finale
-logger.info(f"Addestramento del modello SVM finale su {n_rem} soggetti...")
-svm_final_hold = SVC(kernel='linear', C=C_final, probability=True, random_state=42)
-svm_final_hold.fit(X_rem_std, y_rem)
-w_final_hold = svm_final_hold.coef_.flatten()
+logger.info(f"Addestramento del modello SVM (PyTorch) finale su {n_rem} soggetti...")
+svm_final_hold = SVM(input_dim=M).to(DEVICE)
+# Aumentiamo le epoche per il training finale per assicurare una buona convergenza
+svm_final_hold, loss_history = train_svm(svm_final_hold, X_rem_std, y_rem, C_final, epochs=200)
+w_final_hold = svm_final_hold.linear.weight.data.cpu().numpy().flatten()
 
-# 5.1.4 Predizione e valutazione su Hold-Out set
 logger.info(f"Valutazione del modello finale su {len(y_hold_test)} soggetti del hold-out set...")
-y_prob_svm_hold = svm_final_hold.predict_proba(X_hold_std)[:, 1]
-y_pred_svm_hold = (y_prob_svm_hold >= 0.5).astype(int)
+with torch.no_grad():
+    X_hold_tensor = torch.tensor(X_hold_std, dtype=torch.float32).to(DEVICE)
+    scores_svm_hold = svm_final_hold(X_hold_tensor).cpu().numpy().flatten()
 
+y_pred_svm_hold = (scores_svm_hold >= 0).astype(int)
 accuracy_hold = accuracy_score(y_hold_test, y_pred_svm_hold)
-auc_hold = roc_auc_score(y_hold_test, y_prob_svm_hold)
+auc_hold = roc_auc_score(y_hold_test, scores_svm_hold)
 logger.success(f"Performance su Hold-Out Set: Accuracy = {accuracy_hold:.4f}, AUC = {auc_hold:.4f}")
+
+# -------------------------- NUOVA SEZIONE GRAFICI --------------------------
+logger.info("Creazione dei grafici di performance...")
+plt.style.use('seaborn-v0_8-whitegrid')
+
+# 1. Grafico della Loss
+fig1, ax1 = plt.subplots(figsize=(10, 6))
+ax1.plot(loss_history)
+ax1.set_title('SVM Finale: Curva di Loss del Training')
+ax1.set_xlabel('Epoca')
+ax1.set_ylabel('Hinge Loss')
+ax1.grid(True)
+plt.tight_layout()
+fig1.savefig('svm_final_training_loss.png', dpi=300)
+logger.success("Grafico della curva di loss salvato in 'svm_final_training_loss.png'")
+
+# 2. Matrice di Confusione
+fig2, ax2 = plt.subplots(figsize=(8, 6))
+cm = confusion_matrix(y_hold_test, y_pred_svm_hold)
+sns.heatmap(cm, annot=True, fmt='d', cmap='Blues', ax=ax2,
+            xticklabels=['Control (CTRL)', 'Alzheimer (AD)'],
+            yticklabels=['Control (CTRL)', 'Alzheimer (AD)'])
+ax2.set_title('Matrice di Confusione su Hold-Out Set')
+ax2.set_xlabel('Predetto')
+ax2.set_ylabel('Vero')
+plt.tight_layout()
+fig2.savefig('svm_holdout_confusion_matrix.png', dpi=300)
+logger.success("Grafico della matrice di confusione salvato in 'svm_holdout_confusion_matrix.png'")
+
+# 3. Curva ROC
+fig3, ax3 = plt.subplots(figsize=(10, 6))
+fpr, tpr, _ = roc_curve(y_hold_test, scores_svm_hold)
+ax3.plot(fpr, tpr, color='darkorange', lw=2, label=f'Curva ROC (AUC = {auc_hold:.2f})')
+ax3.plot([0, 1], [0, 1], color='navy', lw=2, linestyle='--')
+ax3.set_xlim([0.0, 1.0])
+ax3.set_ylim([0.0, 1.05])
+ax3.set_xlabel('False Positive Rate')
+ax3.set_ylabel('True Positive Rate')
+ax3.set_title('Curva ROC su Hold-Out Set')
+ax3.legend(loc="lower right")
+ax3.grid(True)
+plt.tight_layout()
+fig3.savefig('svm_holdout_roc_curve.png', dpi=300)
+logger.success("Grafico della curva ROC salvato in 'svm_holdout_roc_curve.png'")
+# ---------------------------------------------------------------------------
 
 logger.success("SEZIONE 5 COMPLETATA: Modello finale addestrato e valutato.")
 
@@ -150,35 +198,30 @@ logger.success("SEZIONE 5 COMPLETATA: Modello finale addestrato e valutato.")
 # SEZIONE 6: AGGREGAZIONE DEI PESI IN ASPETTI E MAPPA NIfTI
 # ==========================================================================
 logger.info("INIZIO SEZIONE 6: Aggregazione dei pesi e creazione della mappa NIfTI.")
-
-# 6.1 Aggregazione dei pesi SVM finali in "aspetti"
-logger.info(f"Aggregazione dei {M} pesi voxel-wise in {K} aspetti...")
 W_bar_hold = np.zeros(K)
 for a in range(1, K + 1):
     vox_indices_in_aspect = np.where(cluster_labels_voxel == a)[0]
     if len(vox_indices_in_aspect) > 0:
         W_bar_hold[a - 1] = np.sum(w_final_hold[vox_indices_in_aspect])
 
-# 6.2 Creazione della mappa NIfTI
 logger.info("Creazione della mappa 3D dei pesi aggregati...")
-# Crea un vettore flat con M elementi, dove ogni voxel ha il valore dell'aspetto a cui appartiene
-flat_map = W_bar_hold[cluster_labels_voxel - 1] # -1 per passare da 1-based a 0-based
-
-# Crea un volume 3D vuoto e inserisci i valori dei voxel attivi
+flat_map = W_bar_hold[cluster_labels_voxel - 1]
 W_map_hold_3D = np.zeros(mask3D.shape, dtype=np.float32)
 W_map_hold_3D[mask3D] = flat_map
 
-# Salvataggio del file NIfTI usando un'immagine di riferimento per l'header
 try:
     ref_img = nib.load(reference_nii_path)
-    affine = ref_img.affine
-    header = ref_img.header
-    
-    nifti_image = nib.Nifti1Image(W_map_hold_3D, affine, header)
-    output_nii_file = 'SVM_weight_map_aspects_holdout.nii'
+    nifti_image = nib.Nifti1Image(W_map_hold_3D, ref_img.affine, ref_img.header)
+    output_nii_file = 'SVM_PyTorch_weight_map_aspects_holdout.nii'
     nib.save(nifti_image, output_nii_file)
     logger.success(f"Mappa NIfTI salvata con successo in: '{output_nii_file}'")
 except FileNotFoundError:
-    logger.error(f"File NIfTI di riferimento non trovato in '{reference_nii_path}'. Impossibile salvare la mappa.")
+    logger.error(f"File NIfTI di riferimento non trovato in '{reference_nii_path}'.")
 
-logger.success("SEZIONE 6 COMPLETATA: Pipeline SVM terminata.")
+output_svm_vectors_file = 'svm_results.npz'
+np.savez_compressed(output_svm_vectors_file,
+                    W_bar_hold=W_bar_hold,
+                    w_final_hold=w_final_hold)
+logger.success(f"Vettori di importanza SVM salvati in: '{output_svm_vectors_file}'")
+
+logger.success("SEZIONE 6 COMPLETATA: Pipeline SVM (PyTorch) terminata.")
