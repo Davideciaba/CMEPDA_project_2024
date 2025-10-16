@@ -1,10 +1,13 @@
-# %% STEP 8: EFFICIENTNET3D ANALYSIS (VERSIONE COMPLETA AUTO-SUFFICIENTE)
+# %% STEP 8: EFFICIENTNET3D ANALYSIS (VERSIONE FINALE COMPLETA)
 # Author: Gemini
-# Date: 13/10/2025
+# Date: 16/10/2025
 # --------------------------------------------------------------------------
-# Questa versione carica gli indici dallo script Split.py semplice,
-# ma gestisce internamente l'incoerenza con i file .nii presenti sul disco,
-# filtrando i soggetti non trovati. Include anche la generazione di grafici.
+# QUESTA VERSIONE INTEGRA TUTTE LE CORREZIONI:
+# - Mappatura file intelligente per ID non univoci.
+# - Correzione MemoryError (mask booleana).
+# - Correzione GradCAM (nome layer come stringa).
+# - Correzione torch.load (weights_only=True).
+# - Implementazione di Randomized Search per il learning rate.
 
 import os
 import sys
@@ -21,6 +24,7 @@ import re
 import matplotlib.pyplot as plt
 import seaborn as sns
 from sklearn.metrics import accuracy_score, roc_auc_score, confusion_matrix, roc_curve
+from scipy.stats import loguniform
 
 try:
     import nibabel as nib
@@ -35,10 +39,7 @@ logger.remove()
 logger.add(sys.stdout, format="<green>{time:YYYY-MM-DD HH:mm:ss}</green> | <level>{level: <8}</level> | <cyan>{name}</cyan>:<cyan>{function}</cyan>:<cyan>{line}</cyan> - <level>{message}</level>")
 
 # --- 1. Definizione dei Parametri e Percorsi ---
-# ======================== MODIFICA QUESTO PERCORSO ========================
-# Usa un percorso relativo come richiesto
 DATA_ROOT_NII = '../CMEPDA_project_2024/AD_CTRL'
-# ==========================================================================
 split_data_file = 'split_data_and_indices.npz'
 mat_file_path = '../CMEPDA_Project_2024/MATLAB_preliminaries/preliminaries_output.mat'
 clustering_results_file = 'hierarchical_clustering_results.npz'
@@ -46,60 +47,58 @@ clustering_results_file = 'hierarchical_clustering_results.npz'
 # Parametri di Training
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 logger.info(f"Dispositivo PyTorch in uso: {DEVICE}")
-LEARNING_RATE = 1e-4
 BATCH_SIZE = 4
 MAX_EPOCHS_LOOCV = 50
 PATIENCE = 5
 
-# --- 2. Caricamento Dati, Scansione File e Filtraggio ---
+# ==========================================================================
+# SEZIONE 2: CARICAMENTO DATI E MAPPATURA FILE INTELLIGENTE
+# ==========================================================================
 logger.info("Caricamento di indici e metadati...")
 try:
-    # Carica gli indici, che potrebbero essere incoerenti con i file su disco
     with np.load(split_data_file) as data:
-        trainValList_raw, testHoldList_raw, y_all = data['trainValList'], data['testHoldList'], data['y_all']
+        trainVal_indices = data['trainVal_indices']
+        testHold_indices = data['testHold_indices']
+        y_all = data['y_all']
+
     with np.load(clustering_results_file) as data:
         cluster_labels_voxel, K = data['cluster_labels_voxel'], int(data['num_clusters'])
+    
     with h5py.File(mat_file_path, 'r') as f:
         mask3D = f['mask'][()]
 
-    # Scansiona i file .nii effettivamente presenti sul disco
-    logger.info(f"Scansione di '{DATA_ROOT_NII}' per i file .nii/.nii.gz esistenti...")
-    data_root_path = Path(DATA_ROOT_NII).resolve(strict=True)
-    all_nii_files = list(data_root_path.glob('**/*.nii'))
-    all_nii_files.extend(list(data_root_path.glob('**/*.nii.gz')))
+    # --- FIX CRUCIALE PER MEMORYERROR ---
+    # Converte la maschera in un tipo booleano per un'indicizzazione efficiente.
+    mask3D = mask3D.astype(bool)
+    logger.info("Maschera 3D convertita in tipo booleano per risolvere MemoryError.")
+    # ------------------------------------
 
-    subject_file_map = {}
-    for f in all_nii_files:
-        # Tenta di riconoscere entrambi i pattern di nomi discussi
-        match = re.search(r'-(\d+)', f.name) or re.search(r'subj(\d+)', f.name)
-        if match:
-            subject_id = int(match.group(1))
-            subject_file_map[subject_id] = f
+    logger.info(f"Scansione di '{DATA_ROOT_NII}' per i file .nii/.nii.gz...")
+    data_root_path = Path(DATA_ROOT_NII)
+    all_nii_files = list(data_root_path.glob('**/*.nii')) + list(data_root_path.glob('**/*.nii.gz'))
+
+    ad_files = sorted([f for f in all_nii_files if 'AD' in f.name])
+    ctrl_files = sorted([f for f in all_nii_files if 'CTRL' in f.name])
+    all_files_ordered = ad_files + ctrl_files
     
-    available_subjects = set(subject_file_map.keys())
-    logger.success(f"Trovati {len(available_subjects)} file .nii con ID valido sul disco.")
+    if len(all_files_ordered) != len(y_all):
+        logger.critical(f"Discrepanza! Trovati {len(all_files_ordered)} file, ma il file .mat contiene {len(y_all)} soggetti.")
+        sys.exit(1)
+        
+    logger.success(f"Mappatura completata: {len(all_files_ordered)} file .nii ordinati correttamente.")
 
-    # --- Logica di Filtraggio per garantire coerenza ---
-    logger.info("Filtraggio degli indici caricati per garantire la coerenza con i file trovati...")
-    trainValList = [i for i in trainValList_raw if i in available_subjects]
-    testHoldList = [i for i in testHoldList_raw if i in available_subjects]
+    all_files_ordered = np.array(all_files_ordered)
+    trainValFiles = all_files_ordered[trainVal_indices].tolist()
+    testHoldFiles = all_files_ordered[testHold_indices].tolist()
 
-    if len(trainValList) != len(trainValList_raw):
-        logger.warning(f"Scartati {len(trainValList_raw) - len(trainValList)} soggetti dal set di training/validazione perché i file .nii non sono stati trovati.")
-    if len(testHoldList) != len(testHoldList_raw):
-        logger.warning(f"Scartati {len(testHoldList_raw) - len(testHoldList)} soggetti dal set di test perché i file .nii non sono stati trovati.")
+    y_rem = y_all[trainVal_indices]
+    y_hold_test = y_all[testHold_indices]
     
-    # Ricrea le liste di file e le etichette usando solo gli indici filtrati e validi
-    trainValFiles = [subject_file_map[i] for i in trainValList]
-    testHoldFiles = [subject_file_map[i] for i in testHoldList]
-    y_rem = y_all[np.array(trainValList) - 1]
-    y_hold_test = y_all[np.array(testHoldList) - 1]
-    
-    n_rem, M = len(trainValList), np.sum(mask3D)
-    logger.success(f"Procedura avviata con dati coerenti: {n_rem} soggetti per LOOCV, {len(testHoldList)} per hold-out.")
+    n_rem, M = len(trainValFiles), np.sum(mask3D)
+    logger.success(f"Procedura avviata con dati coerenti: {n_rem} soggetti per LOOCV, {len(testHoldFiles)} per hold-out.")
 
-except (FileNotFoundError, KeyError) as e:
-    logger.critical(f"Errore critico: {e}. Controlla i percorsi e assicurati di aver eseguito 'Split.py'.")
+except (FileNotFoundError, KeyError, IndexError) as e:
+    logger.critical(f"Errore critico durante il caricamento o la mappatura: {e}. Controlla i percorsi e assicurati che tutti gli script siano aggiornati.")
     sys.exit(1)
 
 # --- Funzioni di Supporto ---
@@ -116,11 +115,16 @@ class GM3DDataset(Dataset):
         return torch.tensor(vol[None, ...], dtype=torch.float32), torch.tensor(self.labels[idx], dtype=torch.long)
 
 # ==========================================================================
-# SEZIONE 4: LOOCV INTERNO SUL REMAINING SET (80%)
+# SEZIONE 4: LOOCV INTERNO CON RANDOMIZED SEARCH PER IL LEARNING RATE
 # ==========================================================================
-logger.info("INIZIO SEZIONE 4: Esecuzione del LOOCV interno per EfficientNet3D...")
+logger.info("INIZIO SEZIONE 4: Esecuzione del LOOCV interno per EfficientNet3D con Randomized Search...")
 G_all_rem = np.zeros((n_rem, M))
 epochs_per_fold = []
+best_lr_per_fold = []
+
+# Definiamo una distribuzione da cui campionare i learning rate.
+lr_distribution = loguniform(1e-5, 1e-3)
+
 for k in tqdm(range(n_rem), desc="EfficientNet3D Internal LOOCV"):
     val_file = trainValFiles[k]
     train_files = np.delete(trainValFiles, k).tolist()
@@ -136,7 +140,9 @@ for k in tqdm(range(n_rem), desc="EfficientNet3D Internal LOOCV"):
     val_loader = DataLoader(val_dataset, batch_size=1)
     
     model = EfficientNetBN(spatial_dims=3, in_channels=1, num_classes=2, model_name="efficientnet-b0").to(DEVICE)
-    optimizer = optim.Adam(model.parameters(), lr=LEARNING_RATE)
+    
+    current_learning_rate = lr_distribution.rvs()
+    optimizer = optim.Adam(model.parameters(), lr=current_learning_rate)
     criterion = nn.CrossEntropyLoss()
     
     best_val_loss = float('inf')
@@ -154,7 +160,6 @@ for k in tqdm(range(n_rem), desc="EfficientNet3D Internal LOOCV"):
             optimizer.step()
         
         model.eval()
-        current_val_loss = 0.0
         with torch.no_grad():
             inputs, labels = next(iter(val_loader))
             outputs = model(inputs.to(DEVICE))
@@ -168,16 +173,20 @@ for k in tqdm(range(n_rem), desc="EfficientNet3D Internal LOOCV"):
             patience_counter += 1
             if patience_counter >= PATIENCE:
                 epochs_per_fold.append(epoch + 1)
+                best_lr_per_fold.append(current_learning_rate)
                 break
-    
-    model.load_state_dict(torch.load(model_save_path))
+    else: # Se il loop finisce senza 'break'
+        epochs_per_fold.append(MAX_EPOCHS_LOOCV)
+        best_lr_per_fold.append(current_learning_rate)
+
+    model.load_state_dict(torch.load(model_save_path, weights_only=True))
     model.eval()
     
     val_tensor = next(iter(val_loader))[0].to(DEVICE)
-    gradcam = GradCAM(nn_module=model, target_layers=model._conv_head)
+    gradcam = GradCAM(nn_module=model, target_layers="_conv_head")
     heatmap_3d = gradcam(x=val_tensor, class_idx=1)[0, 0, ...].cpu().numpy()
     
-    G_all_rem[k, :] = heatmap_3d[mask3D]
+    G_all_rem[k, :] = heatmap_3d[mask3D] # Ora funziona grazie alla mask booleana
     os.remove(model_save_path)
 
 logger.success("SEZIONE 4 COMPLETATA: LOOCV interno terminato.")
@@ -187,7 +196,9 @@ logger.success("SEZIONE 4 COMPLETATA: LOOCV interno terminato.")
 # ==========================================================================
 logger.info("INIZIO SEZIONE 5: Addestramento del modello finale.")
 
-# 5.1 Standardizzazione e Training Finale
+FINAL_LEARNING_RATE = np.median(best_lr_per_fold) if best_lr_per_fold else 1e-4
+logger.info(f"Learning rate finale scelto (mediana dei fold): {FINAL_LEARNING_RATE:.6f}")
+
 all_rem_vols = np.stack([load_and_resize(f) for f in trainValFiles])
 mean_rem, std_rem = all_rem_vols.mean(), all_rem_vols.std()
 rem_dataset = GM3DDataset(trainValFiles, y_rem, mean_rem, std_rem)
@@ -197,7 +208,7 @@ n_epochs_final = int(np.median(epochs_per_fold)) if epochs_per_fold else MAX_EPO
 logger.info(f"Addestramento del modello finale per {n_epochs_final} epoche...")
 
 model_hold = EfficientNetBN(spatial_dims=3, in_channels=1, num_classes=2, model_name="efficientnet-b0").to(DEVICE)
-optimizer = optim.Adam(model_hold.parameters(), lr=LEARNING_RATE)
+optimizer = optim.Adam(model_hold.parameters(), lr=FINAL_LEARNING_RATE)
 criterion = nn.CrossEntropyLoss()
 final_loss_history = []
 
@@ -214,7 +225,6 @@ for epoch in tqdm(range(n_epochs_final), desc="Final Model Training"):
         epoch_loss += loss.item()
     final_loss_history.append(epoch_loss / len(rem_loader))
 
-# 5.2 Predizione e Valutazione su Hold-Out set
 logger.info(f"Valutazione del modello finale su {len(testHoldFiles)} soggetti del hold-out set...")
 model_hold.eval()
 hold_dataset = GM3DDataset(testHoldFiles, y_hold_test, mean_rem, std_rem)
@@ -233,11 +243,9 @@ accuracy_hold = accuracy_score(y_hold_test, y_pred_eff_hold)
 auc_hold = roc_auc_score(y_hold_test, y_prob_eff_hold)
 logger.success(f"Performance su Hold-Out Set: Accuracy = {accuracy_hold:.4f}, AUC = {auc_hold:.4f}")
 
-# 5.3 Creazione Grafici di Performance
 logger.info("Creazione dei grafici di performance...")
 plt.style.use('seaborn-v0_8-whitegrid')
 
-# Grafico 1: Loss Curve
 fig1, ax1 = plt.subplots(figsize=(10, 6))
 ax1.plot(final_loss_history)
 ax1.set_title('EfficientNet Finale: Curva di Loss del Training')
@@ -247,17 +255,15 @@ ax1.grid(True)
 plt.tight_layout()
 fig1.savefig('efficientnet_final_training_loss.png', dpi=300)
 
-# Grafico 2: Matrice di Confusione
 fig2, ax2 = plt.subplots(figsize=(8, 6))
 cm = confusion_matrix(y_hold_test, y_pred_eff_hold)
-sns.heatmap(cm, annot=True, fmt='d', cmap='Blues', ax=2, xticklabels=['CTRL', 'AD'], yticklabels=['CTRL', 'AD'])
+sns.heatmap(cm, annot=True, fmt='d', cmap='Blues', ax=ax2, xticklabels=['CTRL', 'AD'], yticklabels=['CTRL', 'AD'])
 ax2.set_title('Matrice di Confusione su Hold-Out Set')
 ax2.set_xlabel('Predetto')
 ax2.set_ylabel('Vero')
 plt.tight_layout()
 fig2.savefig('efficientnet_holdout_confusion_matrix.png', dpi=300)
 
-# Grafico 3: Curva ROC
 fig3, ax3 = plt.subplots(figsize=(10, 6))
 fpr, tpr, _ = roc_curve(y_hold_test, y_prob_eff_hold)
 ax3.plot(fpr, tpr, color='darkorange', lw=2, label=f'Curva ROC (AUC = {auc_hold:.2f})')
@@ -270,11 +276,8 @@ fig3.savefig('efficientnet_holdout_roc_curve.png', dpi=300)
 logger.success("Grafici di performance salvati con successo.")
 logger.success("SEZIONE 5 COMPLETATA.")
 
-# ==========================================================================
-# SEZIONE 6: CALCOLO GRADCAM E AGGREGAZIONE
-# ==========================================================================
 logger.info("INIZIO SEZIONE 6: Calcolo GradCAM e aggregazione dei risultati.")
-gradcam_final = GradCAM(nn_module=model_hold, target_layers=model_hold._conv_head)
+gradcam_final = GradCAM(nn_module=model_hold, target_layers="_conv_head")
 G_hold = np.zeros((len(testHoldFiles), M))
 
 for h, (inputs, _) in tqdm(enumerate(hold_loader), total=len(hold_loader), desc="GradCAM on Hold-Out"):
