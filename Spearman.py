@@ -88,6 +88,13 @@ logger.success(f"Matrice di correlazione calcolata. Dimensioni: {corr_mat.shape}
 
 # --- 6. Costruzione della Matrice di Distanza ---
 logger.info("Conversione della matrice di correlazione in matrice di distanza (1 - |corr|)...")
+
+# --- FIX: Aggiungi questa riga per "clippare" i valori ---
+# Forza i valori della matrice di correlazione a rimanere nell'intervallo [-1, 1]
+# per prevenire errori di calcolo dovuti a imprecisioni numeriche.
+np.clip(corr_mat, -1.0, 1.0, out=corr_mat)
+# -----------------------------------------------------------
+
 dist_mat = 1 - np.abs(corr_mat)
 logger.success(f"Matrice di distanza creata. Dimensioni: {dist_mat.shape}")
 
