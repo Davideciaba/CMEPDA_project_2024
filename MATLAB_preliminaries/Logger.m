@@ -1,8 +1,8 @@
 classdef Logger < handle
 % LOGGER A logging class for MATLAB.
 %   Supports multiple log levels, console and file outputs,
-%   colored output (if cprintf is available in MATLAB or with
-%   ANSI code in the terminal), and contextual data.
+%   colored output (if cprintf is available in MATLAB), 
+%   and contextual data.
 %
 %   Key Features:
 %   - Log Levels: Supports TRACE, DEBUG, INFO, SUCCESS, WARNING, ERROR,
@@ -10,8 +10,7 @@ classdef Logger < handle
 %   - Multiple Handlers: Configure output to the console, files, or both
 %     simultaneously, each with its own filtering level.
 %   - Colored Output: Provides colored logs in the MATLAB Desktop (requires
-%     'cprintf' from the File Exchange) and automatically uses ANSI color
-%     codes when running in a terminal.
+%     'cprintf' from the File Exchange).
 %   - File Rotation: Automatically manages the size of log files,
 %     archiving old ones to prevent them from growing indefinitely.
 %   - Contextual Data: Adds metadata (e.g., user ID, session name) to all
@@ -31,21 +30,8 @@ classdef Logger < handle
         % Maps log levels to cprintf colors
         COLORS = containers.Map(...
             {'TRACE', 'DEBUG', 'INFO', 'SUCCESS', 'WARNING', 'ERROR', 'CRITICAL'},...
-            {'black', 'blue', '_green', '*green', '_yellow', 'red', '*red'});
+            {'cyan', '*blue', '*black', '*green', '*yellow', 'red', '*red'});
         
-        % Maps log levels to ANSI color codes for terminal output
-        ANSI_COLORS = containers.Map(...
-            {'TRACE', 'DEBUG', 'INFO', 'SUCCESS', 'WARNING', 'ERROR', 'CRITICAL'},...
-            {...
-                '\x1b[90m', % 'black' 
-                '\x1b[34m', % 'blue'
-                '\x1b[4;32m', % '_green'
-                '\x1b[1;32m', % '*green'
-                '\x1b[4;33m', % '_yellow'
-                '\x1b[31m', % 'red'
-                '\x1b[1;31m' % '*red'
-            });
-        RESET_COLOR = '\x1b[0m'; % ANSI code to reset the color
     end
 
     methods
@@ -125,7 +111,9 @@ classdef Logger < handle
 
             % Format the message with sprintf if additional arguments are provided
             if ~isempty(varargin)
-                try
+                try                    
+                    % Escape '\' to prevent misinterpretation in sprintf
+                    msg = strrep(msg, '\', '\\');
                     message_in = sprintf(msg, varargin{:});
                 catch ME
                     % If formatting fails, issue a warning and use the raw message
@@ -136,8 +124,6 @@ classdef Logger < handle
                 message_in = msg;
             end
             
-            % Substitute '\' with '\\' and force cprinf to print \
-            message_in = strrep(message_in, '\', '\\'); %
             
             % Retrieves info where the log call originated
             caller = obj.getCallerInfo();
@@ -160,42 +146,43 @@ classdef Logger < handle
                 if lvlNum < sink.level
                     continue;
                 end
-
-                % Console and file formatting
-                out = sprintf('%s | %-8s | %s - %s', ...
-                      string(datetime('now'), 'yyyy-MM-dd HH:mm:ss.SSS'), ...
-                      levelName, caller, message_out);
                 
                 if strcmp(sink.type, 'console')
 
-                    if sink.use_colors
-                        % Check if we are in MATLAB desktop environment
-                        isDesktop = usejava('desktop');
+                    if sink.use_colors && ~isempty(which('cprintf'))
+                        % Print with colors using cprintf
+                        color = obj.COLORS(levelName);
 
-                        % If we are in the desktop and cprintf is available
-                        if isDesktop && ~isempty(which('cprintf'))
-                            color = obj.COLORS(levelName);
-                            % Substitute '%' with '%%' and force cprinf to print %
-                            out_for_cprintf = strrep(out, '%', '%%');
-                            cprintf(color, out_for_cprintf);
+                        % Escape '\' and then '%' to prevent
+                        % misinterpretation in cprintf
+                        escaped_message = strrep(message_out, '\', '\\');
+                        escaped_message = strrep(escaped_message, '%', '%%');
 
-                        % If we are in a terminal
-                        else
-                            color = obj.ANSI_COLORS(levelName);
-                            fprintf('%s%s%s', color, out, obj.RESET_COLOR);
-                        end
-    
+                        cprintf('black', sprintf('%s | ', string(datetime('now'), 'yyyy-MM-dd HH:mm:ss.SSS')));
+                        cprintf(color, '%-8s', levelName);
+
+                        cprintf('black', sprintf(' | %s - ', caller))
+                        cprintf(color, [escaped_message '\n']);
+                        
+
                     else
                         % Print without colors
-                        fprintf(out);
+                        out = sprintf('%s | %-8s | %s - %s', ...
+                            string(datetime('now'), 'yyyy-MM-dd HH:mm:ss.SSS'), ...
+                            levelName, caller, message_out);
+                        
+                        % Escape '\' before printing to console
+                        out = strrep(out, '\', '\\');
+                        fprintf('%s\n', out);
                         
                     end
-                    % Add a newline character after printing
-                    fprintf('\n');
 
                 elseif strcmp(sink.type, 'file')
 
-                    % Write the formatted string to the file, adding a newline
+                    % Write to the file
+                    out = sprintf('%s | %-8s | %s - %s', ...
+                      string(datetime('now'), 'yyyy-MM-dd HH:mm:ss.SSS'), ...
+                      levelName, caller, message_out);
                     fprintf(sink.fh, '%s\n', out);
                     
                     % Handles file rotation logic immediately after writing

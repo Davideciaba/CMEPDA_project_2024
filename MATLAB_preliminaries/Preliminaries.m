@@ -5,10 +5,6 @@ function Preliminaries(dirAD, dirCTRL, TIVpath, varargin)
 %   the results to a .mat file.
 %   The function is capable of operating with or without SPM and the Parallel Computing Toolbox.
 %
-%   Syntax:
-%   Preliminaries(dirAD, dirCTRL, TIVpath)
-%   Preliminaries(..., 'Name', Value)
-%
 %   Required Inputs:
 %       dirAD      - Path to the directory containing AD group NIfTI files.
 %       dirCTRL    - Path to the directory containing CTRL group NIfTI files.
@@ -18,11 +14,21 @@ function Preliminaries(dirAD, dirCTRL, TIVpath, varargin)
 %       'outputPath' - Full path for the output .mat file.
 %                      Default: '[function_directory]/preliminaries_output.mat'
 %
-%       'enableFileLogging' - Logical (true/false) to enable file logging.
-%                             Default: false
+%       'pythonLogHandle' - Handle to a Python logging function.
+%                           If this parameter is provided, the function enters 
+%                           "proxy mode": logs are forwarded to the Python logger 
+%                           for centralized handling, in addition to being printed 
+%                           to the MATLAB Command Window (if available).
+%                           Default: [] (uses native MATLAB logger Logger.m)
 %
-%       'logFileName' - String specifying the name for the log file.
-%                       Default: 'log_preliminaries.txt'
+%   Syntax and Usage Examples:
+%
+%   1. Running in Standalone Mode (MATLAB only):
+%      Preliminaries('path/to/AD', 'path/to/CTRL', 'path/to/tiv.csv', 'outputPath', 'processed_data.mat');
+%
+%   2. Running from Python (syntax is for the Python engine):
+%      eng.Preliminaries('path/AD', 'path/CTRL', 'path/tiv.csv', 'pythonLogHandle', py_logger.log, nargout=0)
+%
 
     % --- Initialize inputParser ---
     p = inputParser;
@@ -42,8 +48,7 @@ function Preliminaries(dirAD, dirCTRL, TIVpath, varargin)
 
     % Define the optional name-value parameters
     addParameter(p, 'outputPath', defaultOutputPath, @ischar);
-    addParameter(p, 'enableFileLogging', false, @islogical);
-    addParameter(p, 'logFileName', 'log_preliminaries.txt', @ischar);
+    addParameter(p, 'pythonLogHandle', [], @(x) isa(x, 'function_handle'));
 
     % --- Parse the provided inputs ---
     try
@@ -53,26 +58,22 @@ function Preliminaries(dirAD, dirCTRL, TIVpath, varargin)
     end
     
     % --- Logger Initialization ---
-    logger = Logger('Preliminaries');
-
-    % Logger ConsoleHandler configuration
-    logger.addConsoleHandler('use_colors', true);
-
-    % Ask the user if they want to create a log file
-    if p.Results.enableFileLogging
-        logFilePath = fullfile(funzionPath, p.Results.logFileName);
-        logger.addFileHandler(logFilePath, 'level', 'DEBUG', 'rotation', 50*1024);
-        logger.info('File logging enabled. Saving logs to %s', logFilePath);
+    if ~isempty(p.Results.pythonLogHandle)
+        % Python-driven mode
+        logger = PythonLoggerProxy(p.Results.pythonLogHandle);
+        logger.info('Python-driven mode detected. Proxy logger enabled.');
     else
-        logger.info('File logging disabled. Using console output only.');
+        % Standalone MATLAB mode
+        logger = Logger('Preliminaries');
+        logger.addConsoleHandler('use_colors', true); % Stampa solo sulla Command Window
+        logger.info('MATLAB standalone mode detected. Native logger enabled.');
     end
-
 
     % --- Attempt to start a parallel pool ---
     logger.info('Checking for parallel computing availability...');
     safe_parpool(logger);
 
-    logger.info('=== PIPELINE SECTION 1: START ===');
+    logger.info('===== PIPELINE SECTION 1: START =====');
     % --- 1.1: Reading NIfTI files and dimension check ---
     logger.info('Step 1.1: Reading NIfTI files and dimension check...');
 
@@ -285,7 +286,7 @@ function Preliminaries(dirAD, dirCTRL, TIVpath, varargin)
         logger.critical('Failed during save! Reason: [%s] %s', ME.identifier, ME.message);
         return;
     end
-    logger.info('=== PIPELINE SECTION 1: COMPLETE ===');
+    logger.info('===== PIPELINE SECTION 1: COMPLETE =====');
 
 end
 
