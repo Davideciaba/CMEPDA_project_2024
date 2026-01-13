@@ -1,0 +1,3 @@
+2026-01-13 16:47:37.144 | INFO     | python-default-session | logging_utils.py:__init__:75 - File logging ENABLED. Writing to c:\Users\utente\Desktop\Computing Methods\CMEPDA_project_2024\Tests\test_output.log
+2026-01-13 16:47:37.161 | INFO     | python-default-session | test_logger.py:run_file_logging_test:67 - This message should appear in console AND in the file.
+2026-01-13 16:47:37.178 | ERROR    | python-default-session | test_logger.py:run_file_logging_test:68 - This error should also be written to the file.
