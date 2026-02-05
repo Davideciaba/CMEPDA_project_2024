@@ -247,46 +247,56 @@ function Preliminaries(dirAD, dirCTRL, TIVpath, varargin)
     end
     logger.success('All %d volumes have consistent dimensions: %s', N, mat2str(size(GM0)));
 
+    %% --- 1.3: TIV Normalization ---
+    logger.info('STEP 1.3: Applying multiplicative TIV normalization...');
+    try
+        % Load Total Intracranial Volume (TIV) data
+        tiv_path = p.Results.TIVpath;
+        TIV = readtable(tiv_path).TIV;
+        % Check if the number of TIV entries matches the number of subjects
+        if numel(TIV) ~= N
+            logger.critical('TIV count (%d) does not match subject count (%d).', numel(TIV), N);
+            error('Mismatch between number of subjects and TIV entries.');
+        end
+        % Normalize TIV values by dividing each value by the maximum TIV.
+        TIV_norm = TIV / max(TIV);
+        
+        logger.success('TIV normalization applied!');
+    catch ME
+        logger.critical('Failed during TIV application! Reason: [%s] %s', ME.identifier, ME.message);
+        error('An error occurred during TIV normalization.');
+    end
 
     %% --- 1.2: Creating 3D mask and vectorizing raw data ---
     logger.info('STEP 1.2: Creating 3D mask and vectorizing raw data...');
     % --- Creating the 3D mask ---
-    logger.info('Creating the 3D mask...');
-    % Pre-allocate a 4D logical array to store voxel masks for each subject
-    mask_temp = false([size(GM0), N]);
-    % Loop through all files to build the mask
-    if use_parfor
-       
-        parfor i = 1:N
-            if use_spm
-                current_image = spm_read_vols(spm_vol(GM_files{i}));
-            else
-                current_image = niftiread(GM_files{i});
-            end
-            % Create a binary mask for the current volume and store it in the 4th dimension of mask_temp
-            mask_temp(:,:,:,i) = current_image > 0;
+    gm_threshold = 0.01 
+    logger.info('Creating the 3D mask excluding voxels where average GM probability < %.2f...', gm_threshold);
+    % Initialize a 3D matrix with zeros (start with all false)
+    sum_GM = zeros(size(GM0));
+    % Loop through all files to build the mask        
+    for i = 1:N
+        if use_spm
+            current_image = spm_read_vols(spm_vol(GM_files{i}));
+        else
+            current_image = niftiread(GM_files{i});
         end
-    else
-        
-        for i = 1:N
-            if use_spm
-                current_image = spm_read_vols(spm_vol(GM_files{i}));
-            else
-                current_image = niftiread(GM_files{i});
-            end
-            % Create a binary mask for the current volume and store it in the 4th dimension of mask_temp
-            mask_temp(:,:,:,i) = current_image > 0;
-        end
+        % Handle NaN values by treating them as zeros
+        current_image(isnan(current_image)) = 0;
+        current_image  = current_image / TIV_norm(i);  % Apply TIV normalization
+        % Accumulate the sum
+        sum_GM = sum_GM + current_image;   
     end
 
-    % Collapse the 4th dimension
-    mask = any(mask_temp, 4);
-    logger.success('Created the 3D mask!')
+    % Compute the mean GM probability map
+    mean_GM = sum_GM / N;
 
+    % Create the binary mask based on the threshold
+    mask = mean_GM > gm_threshold;   
+    logger.success('Created the 3D mask!');
 
     % Calculate the number and percentage of active voxels in the mask
-    voxelIdx = find(mask);
-    M = numel(voxelIdx);
+    M = sum(mask(:));
     total_voxels = numel(GM0);
     active_percentage = (M / total_voxels) * 100;
     logger.success('3D mask created with %d active voxels (%.2f%% of total volume).', M, active_percentage);
@@ -323,7 +333,6 @@ function Preliminaries(dirAD, dirCTRL, TIVpath, varargin)
     end
     logger.success('Created the X_raw matrix!');
 
-
     %% --- 1.3: TIV Normalization ---
     logger.info('STEP 1.3: Applying multiplicative TIV normalization...');
     try
@@ -356,6 +365,7 @@ function Preliminaries(dirAD, dirCTRL, TIVpath, varargin)
     try
         logger.info('Saving processed data to %s...', p.Results.outputPath);
         % Save the variables to the specified path (or to the default one)
+        voxelIdx = find(mask); % Linear indices of active voxels in the 3D volume
         save(p.Results.outputPath, 'X_raw', 'y_all', 'mask', 'voxelIdx', 'M', 'N', '-v7.3');
         logger.success('File saved successfully!');
     catch ME

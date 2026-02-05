@@ -232,7 +232,11 @@ def validate_inputs(args):
 def configure_matlab_environment(eng, project_root: Path):
     eng.addpath(str(project_root / "Old Code"), nargout=0)
     eng.addpath(str(project_root / "matlab" / "utils"), nargout=0)
-
+    spm_path = r"C:\Program Files\spm"
+    if os.path.exists(spm_path):
+        eng.addpath(spm_path, nargout=0)
+    else:
+        pass
 
 def prepare_live_log_file():
     fd, live_str = tempfile.mkstemp(prefix="matlab_live_", suffix=".log")
