@@ -123,6 +123,7 @@ def pipeline_svm_cmepda(subjects, X, y, base_out_dir, n_splits_ext=5, n_repeats=
     metrics = {'accuracy': [], 'balanced_accuracy': [], 'auc': [], 'sensitivity': [], 'specificity': []}
     all_comparisons = []
     best_c_values = []
+    all_w, all_haufe, all_haufe_masked, all_vbm = [], [], [], []
     
     for outer_id, train_idx, test_idx in splits:
         logger.info(f"--- Inizio Fold Esterno {outer_id} ---")
@@ -190,8 +191,18 @@ def pipeline_svm_cmepda(subjects, X, y, base_out_dir, n_splits_ext=5, n_repeats=
         p_values, pval_corrected, haufe_masked = calculate_gaonkar_pmap_and_mask(best_svm, haufe_pattern, alpha=0.05)
         
         # (Opzionale: qui inseriresti il salvataggio dei vettori numpy (w, a, haufe_masked) in NIfTI)
-        
-    return metrics, all_comparisons, best_c_values
+        # --- 2. SALVATAGGIO IN LISTA DELLE MAPPE DEL FOLD ---
+        all_w.append(w)
+        all_haufe.append(haufe_pattern)
+        all_haufe_masked.append(haufe_masked)
+        all_vbm.append(vbm_map)
+    
+    mean_w = np.mean(all_w, axis=0)
+    mean_haufe = np.mean(all_haufe, axis=0)
+    mean_haufe_masked = np.mean(all_haufe_masked, axis=0)
+    mean_vbm = np.mean(all_vbm, axis=0)
+
+    return metrics, all_comparisons, best_c_values, (mean_w, mean_haufe, mean_haufe_masked, mean_vbm)
 
 def load_real_data_svm(csv_path, mask_path):
     mask_boolean = nib.load(mask_path).get_fdata() > 0
@@ -217,7 +228,8 @@ if __name__ == "__main__":
     else:
         subjects, X_data, y_data = load_real_data_svm("data/dataset_info.csv", "data/gm_mask_MNI.nii.gz")
 
-    met, xai_comps, C_opt = pipeline_svm_cmepda(subjects, X_data, y_data, base_out_dir, n_splits_ext=5, n_repeats=2)
+    met, xai_comps, C_opt, mean_maps = pipeline_svm_cmepda(subjects, X_data, y_data, base_out_dir, n_splits_ext=5, n_repeats=2)
+    mean_w, mean_haufe, mean_haufe_masked, mean_vbm = mean_maps
     
     # --- REPORTING IPERPARAMETRI E CONSENSO ---
     log10_c_values = [math.log10(c) for c in C_opt]
@@ -242,7 +254,35 @@ if __name__ == "__main__":
     logger.success(f"Balanced Accuracy Media: {np.mean(met['balanced_accuracy']):.3f} ± {np.std(met['balanced_accuracy']):.3f}")
     logger.success(f"Sensitivity Media: {np.mean(met['sensitivity']):.3f} ± {np.std(met['sensitivity']):.3f}")
     logger.success(f"Specificity Media: {np.mean(met['specificity']):.3f} ± {np.std(met['specificity']):.3f}")
+    logger.success(f"Accuracy Media: {np.mean(met['accuracy']):.3f} ± {np.std(met['accuracy']):.3f}")
+    logger.success(f"AUC ROC Media: {np.mean(met['auc']):.3f} ± {np.std(met['auc']):.3f}")
     
+    # --- RICOSTRUZIONE E SALVATAGGIO MAPPE NIFTI 3D ---
+    maps_dir = "data/maps"
+    os.makedirs(maps_dir, exist_ok=True)
+    mask_path = "data/gm_mask_MNI.nii.gz"
+
+    # Salva i NIfTI solo se la maschera reale esiste (evita crash con Dummy Data)
+    if os.path.exists(mask_path):
+        logger.info("Ricostruzione e salvataggio delle mappe NIfTI 3D...")
+        mask_img = nib.load(mask_path)
+        mask_bool = mask_img.get_fdata() > 0
+        
+        def save_3d_map(vector_1d, out_filename):
+            vol_3d = np.zeros(mask_img.shape)  # Crea un volume 3D vuoto
+            vol_3d[mask_bool] = vector_1d      # Inserisce i valori nei voxel GM
+            new_img = nib.Nifti1Image(vol_3d, mask_img.affine, mask_img.header)
+            nib.save(new_img, os.path.join(maps_dir, out_filename))
+            
+        save_3d_map(mean_vbm, "vbm_tstat_map.nii.gz")
+        save_3d_map(mean_w, "svm_weights_mean.nii.gz")
+        save_3d_map(mean_haufe, "svm_haufe_mean.nii.gz")
+        save_3d_map(mean_haufe_masked, "svm_haufe_masked_mean.nii.gz")
+        
+        logger.success(f"Mappe 3D salvate con successo in {maps_dir}/")
+    else:
+        logger.warning(f"Maschera {mask_path} non trovata. Impossibile salvare i NIfTI (normale se stai usando Dummy Data).")
+
     # Stampa i risultati medi del confronto XAI
     df_comps = pd.DataFrame(xai_comps)
     logger.success("=== CONFRONTI XAI MEDI ===")

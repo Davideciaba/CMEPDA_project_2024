@@ -85,32 +85,98 @@ def voxel_wise_permutation_test(ig_maps, labels, n_perm=1000, alpha=0.05):
 def build_efficientnet_3d(model_name="efficientnet-b0", in_channels=1, num_classes=2):
     return EfficientNetBN(model_name=model_name, spatial_dims=3, in_channels=in_channels, num_classes=num_classes, pretrained=False)
 
-def train_and_evaluate_fold(X_train, y_train, X_test, y_test, device, lr=1e-3, weight_decay=1e-4, batch_size=4, max_epochs=10, patience=3):
-    """Training e valutazione con IG, baseline media CTRL e test di permutazione."""
+def train_and_evaluate_fold(X_train, y_train, X_test, y_test, device, batch_size=4, max_epochs=10, patience=3, n_splits_int=5):
+    """Training e valutazione con Nested CV (Grid Search), IG e test di permutazione."""
     
-    # 1. Calcolo Baseline IG: Immagine media dei CTRL del training fold (Punto 4.2)
+    # 1. Calcolo Baseline IG: Immagine media dei CTRL del training fold
     idx_ctrl_train = (y_train == 0)
     if isinstance(X_train, torch.Tensor):
         ctrl_mean_baseline = X_train[idx_ctrl_train].mean(dim=0, keepdim=True).to(device)
     else:
         ctrl_mean_baseline = torch.tensor(X_train[idx_ctrl_train].mean(axis=0, keepdims=True), dtype=torch.float32).to(device)
     
-    # 2. Semplificazione Nested CV: Hold-out interno per Early Stopping
+    # --- 2. GRID SEARCH INTERNA (Nested CV) ---
+    # Griglia degli iperparametri da esplorare (puoi ampliarla!)
+    param_grid = {'lr': [1e-3, 1e-4], 'weight_decay': [1e-4, 1e-5]}
+    best_grid_loss = float('inf')
+    best_lr = 1e-3
+    best_wd = 1e-4
+    
+    logger.info(f"Avvio Grid Search Interna ({n_splits_int}-fold)...")
+    skf_inner = StratifiedKFold(n_splits=n_splits_int, shuffle=True, random_state=42)
+    
+    for lr in param_grid['lr']:
+        for wd in param_grid['weight_decay']:
+            combo_val_losses = []
+            
+            for in_tr_idx, in_val_idx in skf_inner.split(X_train, y_train):
+                X_in_tr, y_in_tr = X_train[in_tr_idx], y_train[in_tr_idx]
+                X_in_val, y_in_val = X_train[in_val_idx], y_train[in_val_idx]
+                
+                # TensorDataset
+                if not isinstance(X_in_tr, torch.Tensor): X_in_tr = torch.tensor(X_in_tr, dtype=torch.float32)
+                if not isinstance(y_in_tr, torch.Tensor): y_in_tr = torch.tensor(y_in_tr, dtype=torch.long)
+                if not isinstance(X_in_val, torch.Tensor): X_in_val = torch.tensor(X_in_val, dtype=torch.float32)
+                if not isinstance(y_in_val, torch.Tensor): y_in_val = torch.tensor(y_in_val, dtype=torch.long)
+
+                in_tr_loader = DataLoader(TensorDataset(X_in_tr, y_in_tr), batch_size=batch_size, shuffle=True, drop_last=True)
+                in_val_loader = DataLoader(TensorDataset(X_in_val, y_in_val), batch_size=batch_size, shuffle=False)
+
+                model_cv = build_efficientnet_3d().to(device)
+                optimizer_cv = optim.Adam(model_cv.parameters(), lr=lr, weight_decay=wd)
+                criterion = nn.CrossEntropyLoss()
+
+                # Addestramento rapido per valutare la combinazione
+                fold_best_val = float('inf')
+                for epoch in range(max_epochs):
+                    model_cv.train()
+                    for inputs, labels in in_tr_loader:
+                        optimizer_cv.zero_grad()
+                        loss = criterion(model_cv(inputs.to(device)), labels.to(device))
+                        loss.backward()
+                        optimizer_cv.step()
+
+                    model_cv.eval()
+                    with torch.no_grad():
+                        val_loss = sum(criterion(model_cv(i.to(device)), l.to(device)).item() for i, l in in_val_loader) / max(1, len(in_val_loader))
+                    if val_loss < fold_best_val: fold_best_val = val_loss
+
+                combo_val_losses.append(fold_best_val)
+                
+            avg_val_loss = np.mean(combo_val_losses)
+            logger.debug(f"Grid Params [lr={lr}, wd={wd}] -> Avg Val Loss: {avg_val_loss:.4f}")
+            
+            if avg_val_loss < best_grid_loss:
+                best_grid_loss = avg_val_loss
+                best_lr = lr
+                best_wd = wd
+                
+    logger.info(f"Migliori iperparametri trovati: lr={best_lr}, weight_decay={best_wd}")
+    fold_hyperparams = {"learning_rate": best_lr, "weight_decay": best_wd, "batch_size": batch_size}
+
+    # --- 3. ADDESTRAMENTO FINALE SUL FOLD ESTERNO (con Early Stopping) ---
+    logger.debug("Inizio addestramento modello finale con parametri ottimali...")
     X_tr, X_val, y_tr, y_val = train_test_split(X_train, y_train, test_size=0.2, stratify=y_train, random_state=42)
+    
+    if not isinstance(X_tr, torch.Tensor): X_tr = torch.tensor(X_tr, dtype=torch.float32)
+    if not isinstance(y_tr, torch.Tensor): y_tr = torch.tensor(y_tr, dtype=torch.long)
+    if not isinstance(X_val, torch.Tensor): X_val = torch.tensor(X_val, dtype=torch.float32)
+    if not isinstance(y_val, torch.Tensor): y_val = torch.tensor(y_val, dtype=torch.long)
+    if not isinstance(X_test, torch.Tensor): X_test = torch.tensor(X_test, dtype=torch.float32)
+    if not isinstance(y_test, torch.Tensor): y_test = torch.tensor(y_test, dtype=torch.long)
+
     train_loader = DataLoader(TensorDataset(X_tr, y_tr), batch_size=batch_size, shuffle=True, drop_last=True)
-    val_loader = DataLoader(TensorDataset(X_val, y_val), batch_size=batch_size, shuffle=False, drop_last=True)
+    val_loader = DataLoader(TensorDataset(X_val, y_val), batch_size=batch_size, shuffle=False)
     test_loader = DataLoader(TensorDataset(X_test, y_test), batch_size=batch_size, shuffle=False)
     
     model = build_efficientnet_3d().to(device)
     criterion = nn.CrossEntropyLoss()
-    # Aggiunta weight_decay per la regolarizzazione richiesta (Punto 4.1)
-    optimizer = optim.Adam(model.parameters(), lr=lr, weight_decay=weight_decay)
+    optimizer = optim.Adam(model.parameters(), lr=best_lr, weight_decay=best_wd)
     
     best_val_loss = float('inf')
     epochs_no_improve = 0
     best_epoch_stopped = max_epochs
     
-    logger.debug("Inizio addestramento EfficientNet...")
     for epoch in range(max_epochs):
         model.train()
         for inputs, labels in train_loader:
@@ -120,7 +186,8 @@ def train_and_evaluate_fold(X_train, y_train, X_test, y_test, device, lr=1e-3, w
             optimizer.step()
             
         model.eval()
-        val_loss = sum(criterion(model(i.to(device)), l.to(device)).item() for i, l in val_loader) / len(val_loader)
+        with torch.no_grad():
+            val_loss = sum(criterion(model(i.to(device)), l.to(device)).item() for i, l in val_loader) / max(1, len(val_loader))
         
         if val_loss < best_val_loss:
             best_val_loss = val_loss
@@ -132,9 +199,9 @@ def train_and_evaluate_fold(X_train, y_train, X_test, y_test, device, lr=1e-3, w
             best_epoch_stopped = epoch + 1 - patience
             break
             
-    fold_hyperparams = {"learning_rate": lr, "weight_decay": weight_decay, "batch_size": batch_size, "early_stopping_epoch": best_epoch_stopped}
+    fold_hyperparams["early_stopping_epoch"] = best_epoch_stopped
             
-    # -- 3. TEST E PREDICITONS --
+    # -- 4. TEST E PREDICITONS --
     model.eval()
     all_preds, all_probs, all_targets = [], [], []
     with torch.no_grad():
@@ -145,45 +212,45 @@ def train_and_evaluate_fold(X_train, y_train, X_test, y_test, device, lr=1e-3, w
             all_targets.extend(labels.numpy())
             
     tn, fp, fn, tp = confusion_matrix(all_targets, all_preds, labels=[0, 1]).ravel()
+    
+    # Prevenzione per dati Dummy: se nel fold di test c'è una sola classe
+    try:
+        auc_val = roc_auc_score(all_targets, all_probs)
+    except ValueError:
+        auc_val = float('nan')
+        logger.warning("ROC AUC non calcolabile: solo una classe presente nel test set.")
+
     metrics = {
         'accuracy': accuracy_score(all_targets, all_preds),
         'balanced_accuracy': balanced_accuracy_score(all_targets, all_preds),
-        'auc': roc_auc_score(all_targets, all_probs),
+        'auc': auc_val,
         'sensitivity': tp / (tp + fn) if (tp + fn) > 0 else 0,
         'specificity': tn / (tn + fp) if (tn + fp) > 0 else 0
     }
     
-    # -- 4. XAI: Integrated Gradients (Punto 4.2) --
+    # -- 5. XAI: Integrated Gradients --
     ig_maps_ad, ig_maps_ctrl, all_ig_maps, all_ig_labels = [], [], [], []
     for inputs, labels in test_loader:
         inputs = inputs.to(device)
-        # Espande la baseline media CTRL per fare match con la dimensione del batch
         baseline_batch = ctrl_mean_baseline.expand(inputs.size(0), -1, -1, -1, -1)
-        
         attributions = compute_integrated_gradients(inputs, model, target_class=1, steps=10, baseline=baseline_batch)
         
         for i in range(inputs.size(0)):
             attr_np = attributions[i].cpu().numpy()
-            # Normalizzazione per soggetto (somma di |IG| costante)
             attr_norm = attr_np / (np.sum(np.abs(attr_np)) + 1e-8) 
-            
             all_ig_maps.append(attr_norm)
             all_ig_labels.append(labels[i].item())
             
-            if labels[i] == 1: 
-                ig_maps_ad.append(attr_norm)
-            else: 
-                ig_maps_ctrl.append(attr_norm)
+            if labels[i] == 1: ig_maps_ad.append(attr_norm)
+            else: ig_maps_ctrl.append(attr_norm)
                 
     ig_mean_AD = np.mean(ig_maps_ad, axis=0) if ig_maps_ad else None
     ig_mean_CTRL = np.mean(ig_maps_ctrl, axis=0) if ig_maps_ctrl else None
     ig_contrast = ig_mean_AD - ig_mean_CTRL if (ig_mean_AD is not None and ig_mean_CTRL is not None) else None
     
-    # -- 5. Significatività delle Mappe IG (Punto 4.3) --
-    # Nota: su dati dummy usiamo 100 permutazioni per rapidità, ma su run definitive porta n_perm=1000
+    # -- 6. Significatività delle Mappe IG --
     p_map, sig_mask = voxel_wise_permutation_test(np.stack(all_ig_maps), all_ig_labels, n_perm=100, alpha=0.05)
     
-    # Mappa IG finale mascherata dai voxel con p < soglia
     ig_contrast_masked = np.copy(ig_contrast) if ig_contrast is not None else None
     if ig_contrast_masked is not None: 
         ig_contrast_masked[~sig_mask] = 0.0
@@ -220,6 +287,7 @@ if __name__ == "__main__":
     USE_DUMMY_DATA = True
     
     if USE_DUMMY_DATA:
+        torch.manual_seed(42)
         n_subj = 40
         subjects = np.array([f"sub_{i:03d}" for i in range(n_subj)])
         X_data = torch.randn(n_subj, 1, 32, 32, 32) 
@@ -230,6 +298,9 @@ if __name__ == "__main__":
     splits = get_or_create_splits(subjects, y_data.numpy() if isinstance(y_data, torch.Tensor) else y_data, n_splits_ext=5, n_repeats=2)
     fold_metrics = {'accuracy': [], 'balanced_accuracy': [], 'auc': [], 'sensitivity': [], 'specificity': []}
     all_hyperparams = []
+
+    all_ig_contrasts = []
+    all_ig_masked = []
     
     for outer_id, train_idx, test_idx in splits:
         logger.info(f"--- Inizio Fold Esterno {outer_id} ---")
@@ -240,8 +311,13 @@ if __name__ == "__main__":
         test_y_true = y_data[test_idx].numpy() if isinstance(y_data, torch.Tensor) else y_data[test_idx]
         
         metrics, xai_maps, fold_hyp, probs, preds = train_and_evaluate_fold(
-            X_data[train_idx], y_data[train_idx], X_data[test_idx], y_data[test_idx], device, batch_size=2
+            X_data[train_idx], y_data[train_idx], X_data[test_idx], y_data[test_idx], 
+            device, batch_size=2, n_splits_int=5   # <-- Aggiunto n_splits_int
         )
+
+        if xai_maps['ig_contrast_AD_minus_CTRL'] is not None:
+            all_ig_contrasts.append(xai_maps['ig_contrast_AD_minus_CTRL'])
+            all_ig_masked.append(xai_maps['ig_contrast_masked'])
         
         # Stampa a schermo le metriche
         logger.info(f"Metriche Fold {outer_id} -> Bal. Acc: {metrics['balanced_accuracy']:.3f} | Sens: {metrics['sensitivity']:.3f} | Spec: {metrics['specificity']:.3f} | AUC: {metrics['auc']:.3f}")
@@ -281,3 +357,30 @@ if __name__ == "__main__":
     logger.success(f"Balanced Accuracy Media: {np.mean(fold_metrics['balanced_accuracy']):.3f} ± {np.std(fold_metrics['balanced_accuracy']):.3f}")
     logger.success(f"Sensitivity Media: {np.mean(fold_metrics['sensitivity']):.3f} ± {np.std(fold_metrics['sensitivity']):.3f}")
     logger.success(f"Specificity Media: {np.mean(fold_metrics['specificity']):.3f} ± {np.std(fold_metrics['specificity']):.3f}")
+    logger.success(f"Accuracy Media: {np.mean(fold_metrics['accuracy']):.3f} ± {np.std(fold_metrics['accuracy']):.3f}")
+    logger.success(f"AUC ROC Media: {np.mean(fold_metrics['auc']):.3f} ± {np.std(fold_metrics['auc']):.3f}")
+
+    # --- MEDIA E SALVATAGGIO MAPPE NIFTI 3D EFFICIENTNET ---
+    maps_dir = "data/maps"
+    os.makedirs(maps_dir, exist_ok=True)
+    mask_path = "data/gm_mask_MNI.nii.gz"
+
+    if os.path.exists(mask_path) and len(all_ig_contrasts) > 0:
+        logger.info("Calcolo medie e salvataggio mappe NIfTI IG 3D...")
+        ref_img = nib.load(mask_path)
+        
+        # 1. Media sui fold
+        mean_ig_contrast = np.mean(all_ig_contrasts, axis=0)
+        mean_ig_masked = np.mean(all_ig_masked, axis=0)
+        
+        # 2. Rimuove la dimensione del canale (1, D, H, W) -> (D, H, W) per NIfTI
+        ig_3d = np.squeeze(mean_ig_contrast)
+        ig_masked_3d = np.squeeze(mean_ig_masked)
+        
+        # 3. Salvataggio
+        nib.save(nib.Nifti1Image(ig_3d, ref_img.affine, ref_img.header), os.path.join(maps_dir, "effnet_ig_mean.nii.gz"))
+        nib.save(nib.Nifti1Image(ig_masked_3d, ref_img.affine, ref_img.header), os.path.join(maps_dir, "effnet_ig_masked_mean.nii.gz"))
+        
+        logger.success(f"Mappe IG NIfTI salvate con successo in {maps_dir}/")
+    else:
+        logger.warning(f"Maschera {mask_path} non trovata o mappe vuote. Salvataggio NIfTI saltato (normale con Dummy Data senza maschera).")
