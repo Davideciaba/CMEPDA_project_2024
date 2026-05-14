@@ -12,7 +12,7 @@ from sklearn.model_selection import StratifiedKFold, train_test_split
 from sklearn.metrics import accuracy_score, balanced_accuracy_score, roc_auc_score, confusion_matrix, f1_score
 
 # Local imports
-from logging_utils import CustomLogger
+from py_logger import CustomLogger
 from efficientnet_utils import (
     get_or_create_splits, 
     compute_integrated_gradients, 

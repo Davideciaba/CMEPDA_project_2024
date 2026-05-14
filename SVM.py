@@ -11,7 +11,7 @@ from sklearn.model_selection import StratifiedKFold, GridSearchCV
 from sklearn.metrics import accuracy_score, balanced_accuracy_score, roc_auc_score, confusion_matrix
 
 # Imports locali
-from logging_utils import CustomLogger
+from py_logger import CustomLogger
 from svm_utils import (
     get_or_create_splits, 
     calculate_gaonkar_pmap_and_mask, 

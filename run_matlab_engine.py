@@ -15,7 +15,7 @@ import matlab.engine
 from matlab.engine import MatlabExecutionError
 from loguru import logger as _loguru_logger
 
-from logging_utils import CustomLogger
+from py_logger import CustomLogger
 
 SESSION_ID = "matlab-preliminaries-session"
 
