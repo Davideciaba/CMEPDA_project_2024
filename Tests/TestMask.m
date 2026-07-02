@@ -70,8 +70,8 @@ mean_GM = sum_vol / N;
 AD_1 = niftiread(GM_files{79});
 [M_AD, total_AD, pct_AD] = analyzeVoxelVolume(AD_1, all_files_struct(79).name);
 
-CTRL_1 = niftiread(GM_files{164});
-[M_CTRL, total_CTRL, pct_CTRL] = analyzeVoxelVolume(CTRL_1, all_files_struct(164).name);
+CTRL_1 = niftiread(GM_files{165});
+[M_CTRL, total_CTRL, pct_CTRL] = analyzeVoxelVolume(CTRL_1, all_files_struct(165).name);
 
 
 thr = 0.01; % Intensity threshold
@@ -79,7 +79,7 @@ thr = 0.01; % Intensity threshold
 mask = mean_GM > thr;
 [M_mask, total_mask, pct_mask] = analyzeVoxelVolume(mask, 'Mask');
 [percentages_mean, worst_idx_mean] = evaluateDataLeakage(GM_files, mask, thr);
-CONSENSUS_RATIO = 0.7;
+CONSENSUS_RATIO = 0.5;
 [consensus_mask, vote_map] = buildConsensusMask(GM_files, thr, CONSENSUS_RATIO);
 [M_mask_cons, total_mask_cons, pct_mask_cons] = analyzeVoxelVolume(consensus_mask, 'Consensus_Mask');
 [percentages_cons, worst_idx_cons] = evaluateDataLeakage(GM_files, consensus_mask, thr);
@@ -147,7 +147,7 @@ figLeakage = plotUnifiedGroupLeakageHistograms(dataADCell, dataCTRLCell, methodL
 % -------------------------------------------------------------------------
 
 % --- Raw Data Visualization ---
-mid_slice_idx = round(size(mean_GM, 3) * 0.33);
+mid_slice_idx = round(size(mean_GM, 3) * 0.5);
 slice_mean = mean_GM(:, :, mid_slice_idx);
 slice_mask = mask(:, :, mid_slice_idx);
 slice_AD = AD_1(:, :, mid_slice_idx);
@@ -168,10 +168,10 @@ maskColors  = {'r', 'g', 'b', 'y' 'm'};
 
 % Creazione etichette usando i tuoi threshold specifici
 labelMask = sprintf('Mask Threshold = %.3f', thr);
-labelCons = sprintf('Consensus Threshold = %.3f', thr);
-labelRig = sprintf('Ridgway Threshold = %.3f', opt_thr);
-labelTPM = sprintf('TPM Threshold = %.3f', thr);
-label_rigTPM = sprintf('RigTPM Threshold = %.3f', opt_thr_TPM);
+labelCons = sprintf('Consensus Thr = %.3f, Ratio = %.3f', thr, CONSENSUS_RATIO);
+labelRig = sprintf('Ridgway Thr = %.3f', opt_thr);
+labelTPM = sprintf('TPM Thr = %.3f', thr);
+label_rigTPM = sprintf('RigTPM Thr = %.3f', opt_thr_TPM);
 maskLabels  = {labelMask, labelCons, labelRig, labelTPM, label_rigTPM};
 
 fig1 = plotMaskOverlays(baseImages, baseTitles, masksToTest, maskColors, maskLabels);
@@ -188,6 +188,9 @@ labelsList = {'Masked', 'Consensus_Masked', 'Ridgway_Masked', 'TPM_Masked', 'TPM
 figHistograms = plotMaskedHistograms(baseImages, baseTitles, ...
                                      masksToTest, colorsList, labelsList, ...
                                      bins, thr);
+
+
+%----------------------------------------------------------------------------
 
 
 
