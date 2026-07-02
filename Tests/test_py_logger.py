@@ -1,13 +1,15 @@
 """
 Module: test_py_logger.py
 
-This test suite uses memory buffers and mock objects to ensure deterministic,
-I/O-free testing of logging behavior, context managers, and sink isolation.
+This test suite ensures deterministic, I/O-free testing of logging behavior,
+context managers, garbage collection and sink isolation for the CustomLogger class.
 """
 import unittest
 import sys
+import os
 import pathlib
 import io
+import tempfile
 from unittest.mock import patch, MagicMock
 
 # Dynamically resolve paths using pathlib
@@ -25,141 +27,188 @@ class TestCustomLogger(unittest.TestCase):
     Test suite for py_logger.CustomLogger.
     
     """
+    def test_initialization_and_context(self):
+        """Verify that basic object states and context mapping behave as expected."""
+        log = py_logger.CustomLogger(name="test_runner")
+        
+        self.assertEqual(log.name, "test_runner")
+        
+        # Add Context
+        log.add_context("Session", "12345")
+        self.assertIn("Session", log.extra_context)
+        self.assertEqual(log.extra_context["Session"], "12345")
+        
+        # Clear Context
+        log.clear_context()
+        self.assertEqual(len(log.extra_context), 0)
 
-    # Constants for testing
-    TEST_LOG_PATH = "mocked_path/dummy.log"
-    DEFAULT_SESSION = "python-default-session"
-    MATLAB_SESSION = "MATLAB_SESSION"
-    MATLAB_TIME = "YYYY-MM-DD HH:mm:ss.SSS"
-
-    # Mock sys.stdout to capture console output (self.info in __init__)
+    # Mock sys.stdout to capture console output
     # with a StringIO object for assertions
     @patch("sys.stdout", new_callable=io.StringIO)
-    # Spy on logger.remove to ensure it's called during initialization.
-    # We execute it instead to mock it because we want to remove the loguru logger standard sink
-    @patch("py_logger.logger.remove", wraps=py_logger.logger.remove)
-    def test_initialization(self, mock_logger_remove: MagicMock, mock_stdout: io.StringIO):
-        """
-        Test that CustomLogger initializes correctly, calls logger.remove(),
-        and sets up the logger.
-        """
-        # Instantiate logger
-        py_logger.CustomLogger(enable_file_logging=False)
+    def test_console_handler_and_levels(self, mock_stdout: io.StringIO):
+        """Verify that global filters apply correctly to the console handler."""
+        log = py_logger.CustomLogger()
+        log.add_console_handler(level="INFO", use_colors=False)
+        
+        # Should be ignored (filtered out by the level)
+        log.debug("Hidden Message")
+        
+        # Should be captured
+        log.info("Visible Message")
+        
+        # Test runtime level shifting
+        log.set_level("TRACE")
+        log.trace("Now Visible Trace")
 
-        # Verify logger.remove() was called exactly once during __init__
-        mock_logger_remove.assert_called_once()
-
-        # Ensure the mock_stdout captured the setup message, keeping the console clean
         output = mock_stdout.getvalue()
-        self.assertIn("File logging DISABLED", output)
+        
+        # Asserts
+        self.assertNotIn("Hidden Message", output)
+        self.assertIn("Visible Message", output)
+        self.assertIn("Now Visible Trace", output)
+        self.assertIn("INFO", output)
+        self.assertIn("TRACE", output)
 
-    # No need to capture sys.stdout for this test since we are mocking logger.add for the file
-    # No need to wrap logger.add since we want to mock it to prevent file creation
+    @patch("sys.stdout", new_callable=io.StringIO)
+    def test_context_injection(self, mock_stdout: io.StringIO):
+        """Verify that the context is appended to logs."""
+        log = py_logger.CustomLogger()
+        log.add_console_handler(level="DEBUG")
+        
+        log.add_context("Module", "VBM")
+        log.add_context("Status", "Active")
+        log.debug("Processing slice")
+        
+        output = mock_stdout.getvalue()
+        
+        self.assertIn("Processing slice", output)
+        self.assertIn("Module = VBM | Status = Active", output)
+
+    @patch("sys.stdout", new_callable=io.StringIO)
+    def test_context_manager(self, mock_stdout: io.StringIO):
+        """
+        Verify that the context manager temporarily injects and properly 
+        cleans up metadata in a with block.
+        """
+        log = py_logger.CustomLogger()
+        log.add_console_handler(level="DEBUG")
+        
+        log.add_context("Global", "Active")
+        
+        # Enter context block
+        with log.context(Temporary="Yes", Task=1):
+            log.info("Inside block")
+            
+        log.info("Outside block")
+        
+        output = mock_stdout.getvalue()
+        lines = [line for line in output.splitlines() if line.strip()]
+        
+        # Check inside block log
+        inside_log = lines[0]
+        self.assertIn("Global = Active | Temporary = Yes | Task = 1", inside_log)
+        self.assertIn("Inside block", inside_log)
+        
+        # Check outside block log
+        outside_log = lines[1]
+        self.assertIn("Global = Active", outside_log)
+        self.assertNotIn("Temporary", outside_log)
+        self.assertNotIn("Task", outside_log)
+        self.assertIn("Outside block", outside_log)
+
+    # Mock logger.add to prevent file creation and capture parameters
     @patch("py_logger.logger.add")
-    def test_file_logging_parameters(self, mock_logger_add: MagicMock):
+    def test_rotation_parameter_translation(self, mock_logger_add):
         """
-        Test that the file logging parameters are set correctly when enable_file_logging is True.
+        Verify that numeric rotation parameters are mathematically translated to bytes, 
+        while semantic strings are preserved.
         """
-        py_logger.CustomLogger(
-            log_file_path=self.TEST_LOG_PATH,
-            enable_file_logging=True,
-            level="DEBUG"
-        )
-
-        expected_format = (
-            "{time:YYYY-MM-DD HH:mm:ss.SSS} | "
-            "{level: <8} | "
-            "{extra[session_id]} | " 
-            "{file.name}:{function}:{line} - {message}"
-        )
-
-        # Iterate through all calls to logger.add to find the file sink configuration
-        file_sink_configured = False
-        for call_args in mock_logger_add.call_args_list:
-            args, kwargs = call_args
-            # Check if this specific call was intended for the file path
-            if args and args[0] == self.TEST_LOG_PATH:
-                file_sink_configured = True
-                self.assertEqual(kwargs.get("rotation"), "50 KB")
-                self.assertEqual(kwargs.get("compression"), "zip")
-                self.assertEqual(kwargs.get("level"), "DEBUG")
-                self.assertEqual(kwargs.get("format"), expected_format)
-
-        self.assertTrue(
-            file_sink_configured,
-            "The file sink was not configured with the expected log file path."
-        )
-
-    # Since that we checked logger.remove() is called, we instantiate the logger now
-    # No need to mock logger.add since we want to test the console sinks
-    # We need only to mock sys.stdout to capture console output for assertions
-    @patch("sys.stdout", new_callable=io.StringIO)
-    def test_console_routing(self, mock_stdout: io.StringIO):
-        """
-        Test that the standard Python logs and MATLAB logs are strictly routed
-        to their respective formatting sinks without duplication.
-        """
-        # Instantiate logger
-        log = py_logger.CustomLogger(enable_file_logging=False, level="INFO")
-
-        # Trigger standard log
-        standard_msg = "Standard Python Log"
-        log.info(standard_msg)
-
-        # Trigger MATLAB log via context manager
-        matlab_msg = "MATLAB Engine Log"
-        with log.context(session_id=self.MATLAB_SESSION, from_matlab=True, mt=self.MATLAB_TIME):
-            log.info(matlab_msg)
-
-        # Extract console output captured by mock_stdout
-        output = mock_stdout.getvalue()
-
-        # Positive Assertions
-        self.assertIn(standard_msg, output)
-        self.assertIn(self.DEFAULT_SESSION, output)
-        self.assertIn(matlab_msg, output)
-        self.assertIn(self.MATLAB_SESSION, output)
-        self.assertIn(self.MATLAB_TIME, output)
-
-        # Negative Assertions
-        self.assertEqual(
-            output.count(standard_msg), 1,
-            "Standard message was duplicated, check filter logic."
-        )
-        self.assertEqual(
-            output.count(matlab_msg), 1,
-            "MATLAB message was duplicated, check filter logic."
-        )
+        log = py_logger.CustomLogger()
+        
+        # Test numeric (int/float) bytes translation
+        log.add_file_handler("numeric.log", rotation=1024)
+        args, kwargs = mock_logger_add.call_args
+        self.assertEqual(kwargs.get("rotation"), "1024 B")
+        
+        # Test string preservation for advanced loguru features
+        log.add_file_handler("string.log", rotation="10 MB")
+        args, kwargs = mock_logger_add.call_args
+        self.assertEqual(kwargs.get("rotation"), "10 MB")
 
     @patch("sys.stdout", new_callable=io.StringIO)
-    def test_log_levels(self, mock_stdout: io.StringIO):
+    def test_log_method_and_formatting_error(self, mock_stdout: io.StringIO):
         """
-        Test that all log levels are correctly captured and formatted in the console output.
+        Verify the log() method and its exception handling 
+        for intentionally malformed format strings.
         """
-        log = py_logger.CustomLogger(enable_file_logging=False, level="TRACE")
-
-        # Execute all wrapper methods with string formatting
-        log.trace("Metric {val}", val="TRACE")
-        log.debug("Metric {val}", val="DEBUG")
-        log.info("Metric {val}", val="INFO")
-        log.success("Metric {val}", val="SUCCESS")
-        log.warn("Metric {val}", val="WARN")
-        log.error("Metric {val}", val="ERROR")
-        log.critical("Metric {val}", val="CRITICAL")
-
+        log = py_logger.CustomLogger()
+        log.add_console_handler(level="TRACE")
+        
+        # Correct formatting
+        log.log("DEBUG", "Value: {}", 42)
+        
+        # Broken formatting (missing placeholder values)
+        log.log("INFO", "Broken string {missing}", 42)
+        
         output = mock_stdout.getvalue()
+        
+        # Asserts
+        self.assertIn("Value: 42", output)
+        self.assertIn("Failed to format log message! Reason", output)
+        self.assertIn("Broken string {{missing}}", output)
 
-        # Verify every level was captured and correctly interpolated
-        levels_to_check = [
-            "TRACE", "DEBUG", "INFO", "SUCCESS", 
-            "WARN", "ERROR", "CRITICAL"
-        ]
-
-        for level in levels_to_check:
-            self.assertIn(
-                level, output,
-                f"Expected interpolated value {level} missing from output."
+    def test_garbage_collection(self):
+        """
+        Verifies that 0-byte log files are automatically 
+        deleted from disk during the shutdown sequence.
+        """
+        with tempfile.TemporaryDirectory() as temp_dir:
+            log_file = pathlib.Path(temp_dir) / "empty_garbage.log"
+            
+            # Instantiate and immediately destroy
+            def create_abandoned_file():
+                log = py_logger.CustomLogger()
+                log.add_file_handler(str(log_file), level="INFO")
+                # Intentionally writing NO logs. File created but remains at 0 bytes.
+                log.shutdown() # Force immediate teardown
+                
+            create_abandoned_file()
+            
+            # Assert file was collected and destroyed
+            self.assertFalse(
+                log_file.exists(), 
+                "The 0-byte abandoned log file was not destroyed."
             )
+    
+    def test_file_logging_integration(self):
+        """
+        Verifies successful writes to disk and that the log file contains the expected content.
+        """
+        # Create an isolated temporary directory
+        with tempfile.TemporaryDirectory() as temp_dir:
+            log_file = pathlib.Path(temp_dir) / "integration_test.log"
+
+            log = py_logger.CustomLogger()
+            log.add_file_handler(str(log_file), level="INFO")
+            log.add_context("Deployment", "TestEnv")
+            
+            test_message = "REAL_DISK_WRITE_TEST_SUCCESSFUL"
+            log.info(test_message)
+
+            # Shutdown the logger to flush and close file handles
+            log.shutdown()
+
+            # Assert file exists and it is not empty
+            self.assertTrue(log_file.exists())
+            self.assertTrue(os.path.getsize(str(log_file)) > 0)
+
+            # Read the file content
+            with open(log_file, "r", encoding="utf-8") as f:
+                content = f.read()
+
+            self.assertIn(test_message, content)
+            self.assertIn("Deployment = TestEnv", content)   
+
 
 if __name__ == '__main__':
     unittest.main(verbosity=2)

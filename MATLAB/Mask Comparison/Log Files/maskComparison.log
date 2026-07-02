@@ -1,0 +1,14 @@
+2026-07-02 15:22:15.979 | INFO     | VBMAnalysis:VBMAnalysis.twoSampleTTest:115 - SPM Batch successfully configured. Executing GLM...
+2026-07-02 15:24:47.109 | SUCCESS  | VBMAnalysis:VBMAnalysis.twoSampleTTest:120 - SPM GLM estimation completed successfully. Results saved in: C:\Users\utente\Desktop\Computing Methods\CMEPDA_project_2024\MATLAB\Mask Comparison\Results\TPM Mask VBM Results
+2026-07-02 15:24:47.155 | INFO     | VBMAnalysis:VBMAnalysis.getCorrectedMap:139 - Computing FWE correction (p<0.050) for contrast: Atrophy: CTRL > AD
+2026-07-02 15:24:47.470 | SUCCESS  | VBMAnalysis:VBMAnalysis.getCorrectedMap:222 - Statistical threshold computed successfully: T > 5.208
+2026-07-02 15:24:47.822 | INFO     | VBMAnalysis:VBMAnalysis.evaluateMapSimilarity:278 - Similarity [Mean FWE Map] vs [TPM FWE Map]
+2026-07-02 15:24:47.866 | INFO     | VBMAnalysis:VBMAnalysis.evaluateMapSimilarity:279 - Active Voxels: Mean FWE Map = 5634 | TPM FWE Map = 5540 | Intersection: 5540 voxels
+2026-07-02 15:24:47.887 | INFO     | VBMAnalysis:VBMAnalysis.evaluateMapSimilarity:281 - Dice: 0.9916 | Jaccard: 0.9833
+2026-07-02 15:24:47.914 | INFO     | VBMAnalysis:VBMAnalysis.evaluateMapSimilarity:282 - Inclusion: 98.33% of Mean FWE Map is inside TPM FWE Map | 100.00% of TPM FWE Map is inside Mean FWE Map
+2026-07-02 15:24:47.942 | INFO     | VBMAnalysis:VBMAnalysis.evaluateMapSimilarity:284 - Pearson Corr in intersection: 1.0000
+2026-07-02 15:25:10.871 | INFO     | BrainRenderer:BrainRenderer.saveFigure:500 - Attempting to save figure to: C:\Users\utente\Desktop\Computing Methods\CMEPDA_project_2024\MATLAB\Mask Comparison\Plots\VBM_Mean_Mask_FWE_p005.png
+2026-07-02 15:25:21.938 | SUCCESS  | BrainRenderer:BrainRenderer.saveFigure:503 - Figure saved successfully.
+2026-07-02 15:25:35.818 | INFO     | BrainRenderer:BrainRenderer.saveFigure:500 - Attempting to save figure to: C:\Users\utente\Desktop\Computing Methods\CMEPDA_project_2024\MATLAB\Mask Comparison\Plots\VBM_TPM_Mask_FWE_p005_0.png
+2026-07-02 15:25:45.745 | SUCCESS  | BrainRenderer:BrainRenderer.saveFigure:503 - Figure saved successfully.
+2026-07-02 15:25:47.064 | SUCCESS  | RunMaskComparison:RunMaskComparison:269 - Mask Comparison successfully completed!
