@@ -1,0 +1,70 @@
+2026-07-02 20:46:31.324 | SUCCESS  | RunMaskComparison:RunMaskComparison:88 - File logging successfully initialized at: C:\Users\utente\Desktop\Computing Methods\CMEPDA_project_2024\MATLAB\Mask Comparison\Log Files\maskComparison.log
+2026-07-02 20:46:31.335 | INFO     | RunMaskComparison:RunMaskComparison:95 - --- Phase 1: Data Loading and Grouping ---
+2026-07-02 20:46:31.356 | INFO     | CohortData:CohortData.scanDirectory:47 - Recursive scan for covariateADCTRLsexAgeTIV.csv in C:\Users\utente\Desktop\Computing Methods\CMEPDA_project_2024\AD_CTRL
+2026-07-02 20:46:31.369 | SUCCESS  | CohortData:CohortData.scanDirectory:62 - Found clinical covariates file covariateADCTRLsexAgeTIV.csv
+2026-07-02 20:46:31.377 | INFO     | CohortData:CohortData.scanDirectory:64 - Recursive scan for NIfTI volumes in C:\Users\utente\Desktop\Computing Methods\CMEPDA_project_2024\AD_CTRL
+2026-07-02 20:46:31.410 | SUCCESS  | CohortData:CohortData.scanDirectory:88 - Scan complete. Found: 144 AD | 189 CTRL | Total: 333
+2026-07-02 20:46:31.419 | INFO     | CohortData:CohortData.loadData:157 - Loading clinical CSV data into memory...
+2026-07-02 20:46:31.761 | INFO     | CohortData:CohortData.loadData:187 - Converting Sex covariate: M->1, F->0
+2026-07-02 20:46:32.099 | SUCCESS  | CohortData:CohortData.getReferenceInfo:145 - Reference spatial metadata successfully extracted.
+2026-07-02 20:46:32.108 | INFO     | CohortData:CohortData.loadData:205 - Loading AD Volumes into memory...
+2026-07-02 20:46:32.887 | DEBUG    | CohortData:CohortData.loadGroupVolumes:367 - Loading subjects. Progress: 36 / 144 (25%)
+2026-07-02 20:46:33.875 | DEBUG    | CohortData:CohortData.loadGroupVolumes:367 - Loading subjects. Progress: 72 / 144 (50%)
+2026-07-02 20:46:34.683 | DEBUG    | CohortData:CohortData.loadGroupVolumes:367 - Loading subjects. Progress: 108 / 144 (75%)
+2026-07-02 20:46:36.048 | DEBUG    | CohortData:CohortData.loadGroupVolumes:367 - Loading subjects. Progress: 144 / 144 (100%)
+2026-07-02 20:46:36.811 | INFO     | CohortData:CohortData.loadData:208 - Loading CTRL Volumes into memory...
+2026-07-02 20:46:39.015 | DEBUG    | CohortData:CohortData.loadGroupVolumes:367 - Loading subjects. Progress: 47 / 189 (25%)
+2026-07-02 20:46:40.937 | DEBUG    | CohortData:CohortData.loadGroupVolumes:367 - Loading subjects. Progress: 94 / 189 (50%)
+2026-07-02 20:46:42.701 | DEBUG    | CohortData:CohortData.loadGroupVolumes:367 - Loading subjects. Progress: 141 / 189 (75%)
+2026-07-02 20:46:45.830 | DEBUG    | CohortData:CohortData.loadGroupVolumes:367 - Loading subjects. Progress: 188 / 189 (99%)
+2026-07-02 20:47:20.897 | SUCCESS  | CohortData:CohortData.loadData:223 - All data successfully loaded into RAM and perfectly aligned (333 subjects).
+2026-07-02 20:47:23.365 | SUCCESS  | CohortData:CohortData.getReferenceInfo:145 - Reference spatial metadata successfully extracted.
+2026-07-02 20:47:23.415 | INFO     | RunMaskComparison:RunMaskComparison:111 - --- Phase 2: Mask Generation and First Evaluation ---
+2026-07-02 20:47:23.756 | INFO     | BrainMask:BrainMask.computeMeanMask:42 - Computing Mean Mask (Threshold: 0.010)...
+2026-07-02 20:47:31.321 | SUCCESS  | BrainMask:BrainMask.computeMeanMask:52 - Mean Mask computed successfully.
+2026-07-02 20:47:31.707 | INFO     | BrainMask:BrainMask.getMaskStats:173 - Mean Mask has 628145 active voxels (29.59% of total volume).
+2026-07-02 20:47:44.357 | INFO     | BrainMask:BrainMask.computeConsensusMask:67 - Computing Consensus Mask (Threshold: 0.010 and Ratio: 0.70)...
+2026-07-02 20:48:05.305 | SUCCESS  | BrainMask:BrainMask.computeConsensusMask:86 - Consensus Mask computed successfully.
+2026-07-02 20:48:05.800 | INFO     | BrainMask:BrainMask.getMaskStats:173 - Consensus Mask has 585421 active voxels (27.58% of total volume).
+2026-07-02 20:48:13.988 | INFO     | BrainMask:BrainMask.loadTpmVolume:255 - Attempting to load SPM Tissue Probability Map (TPM) from: C:\Users\utente\Desktop\spm\tpm\TPM.nii
+2026-07-02 20:48:15.480 | INFO     | BrainMask:BrainMask.loadTpmVolume:260 - Detected a 4D NIfTI file with 6 volumes. Forcing extraction of Volume 1 (Gray Matter).
+2026-07-02 20:48:17.312 | SUCCESS  | BrainMask:BrainMask.computeTpmMask:105 - TPM Mask computed successfully (Threshold: 0.010)
+2026-07-02 20:48:17.346 | INFO     | BrainMask:BrainMask.getMaskStats:173 - TPM Mask has 627444 active voxels (29.56% of total volume).
+2026-07-02 20:48:23.831 | INFO     | BrainMask:BrainMask.computeRidgwayMeanMask:118 - Starting Ridgway Optimization on Mean Volume...
+2026-07-02 20:48:31.595 | INFO     | BrainMask:BrainMask.optimizeRidgwayThreshold:297 - Computing Ridgway Threshold. Searching 230 thresholds...
+2026-07-02 20:48:34.891 | DEBUG    | BrainMask:BrainMask.optimizeRidgwayThreshold:302 - Ridgway Scan: 57 / 230 (25%)
+2026-07-02 20:48:37.216 | DEBUG    | BrainMask:BrainMask.optimizeRidgwayThreshold:302 - Ridgway Scan: 114 / 230 (50%)
+2026-07-02 20:48:39.860 | DEBUG    | BrainMask:BrainMask.optimizeRidgwayThreshold:302 - Ridgway Scan: 171 / 230 (74%)
+2026-07-02 20:48:44.205 | DEBUG    | BrainMask:BrainMask.optimizeRidgwayThreshold:302 - Ridgway Scan: 228 / 230 (99%)
+2026-07-02 20:48:47.539 | SUCCESS  | BrainMask:BrainMask.computeRidgwayMeanMask:130 - Ridgway Mean Mask computed successfully. Optimal T* = 0.360 (Pearson r = 0.934)
+2026-07-02 20:48:47.630 | INFO     | BrainMask:BrainMask.getMaskStats:173 - Ridgway Mean Mask has 324621 active voxels (15.29% of total volume).
+2026-07-02 20:48:58.448 | INFO     | BrainMask:BrainMask.computeRidgwayTpmMask:144 - Starting Ridgway Optimization on TPM Volume...
+2026-07-02 20:48:58.827 | INFO     | BrainMask:BrainMask.loadTpmVolume:255 - Attempting to load SPM Tissue Probability Map (TPM) from: C:\Users\utente\Desktop\spm\tpm\TPM.nii
+2026-07-02 20:48:59.111 | INFO     | BrainMask:BrainMask.loadTpmVolume:260 - Detected a 4D NIfTI file with 6 volumes. Forcing extraction of Volume 1 (Gray Matter).
+2026-07-02 20:48:59.319 | INFO     | BrainMask:BrainMask.optimizeRidgwayThreshold:297 - Computing Ridgway Threshold. Searching 184 thresholds...
+2026-07-02 20:49:00.917 | DEBUG    | BrainMask:BrainMask.optimizeRidgwayThreshold:302 - Ridgway Scan: 46 / 184 (25%)
+2026-07-02 20:49:02.766 | DEBUG    | BrainMask:BrainMask.optimizeRidgwayThreshold:302 - Ridgway Scan: 92 / 184 (50%)
+2026-07-02 20:49:04.584 | DEBUG    | BrainMask:BrainMask.optimizeRidgwayThreshold:302 - Ridgway Scan: 138 / 184 (75%)
+2026-07-02 20:49:06.224 | DEBUG    | BrainMask:BrainMask.optimizeRidgwayThreshold:302 - Ridgway Scan: 184 / 184 (100%)
+2026-07-02 20:49:06.341 | SUCCESS  | BrainMask:BrainMask.computeRidgwayTpmMask:156 - Ridgway TPM Mask computed successfully. Optimal T* = 0.310 (Pearson r = 0.937)
+2026-07-02 20:49:06.376 | INFO     | BrainMask:BrainMask.getMaskStats:173 - Ridgway TPM Mask has 348355 active voxels (16.41% of total volume).
+2026-07-02 20:49:08.341 | INFO     | RunMaskComparison:RunMaskComparison:152 - --- Phase 3: Plotting and Visual comparison ---
+2026-07-02 20:49:18.711 | INFO     | BrainRenderer:BrainRenderer.saveFigure:500 - Attempting to save figure to: C:\Users\utente\Desktop\Computing Methods\CMEPDA_project_2024\MATLAB\Mask Comparison\Plots\Leakage_Comparison.png
+2026-07-02 20:49:33.762 | SUCCESS  | BrainRenderer:BrainRenderer.saveFigure:515 - Folder created and figure saved successfully.
+2026-07-02 20:49:45.437 | INFO     | BrainRenderer:BrainRenderer.saveFigure:500 - Attempting to save figure to: C:\Users\utente\Desktop\Computing Methods\CMEPDA_project_2024\MATLAB\Mask Comparison\Plots\Overlay_Comparison.png
+2026-07-02 20:50:07.083 | SUCCESS  | BrainRenderer:BrainRenderer.saveFigure:503 - Figure saved successfully.
+2026-07-02 20:50:15.380 | INFO     | BrainRenderer:BrainRenderer.saveFigure:500 - Attempting to save figure to: C:\Users\utente\Desktop\Computing Methods\CMEPDA_project_2024\MATLAB\Mask Comparison\Plots\Mask_Hist_Comparison.png
+2026-07-02 20:50:26.782 | SUCCESS  | BrainRenderer:BrainRenderer.saveFigure:503 - Figure saved successfully.
+2026-07-02 20:50:30.104 | INFO     | BrainRenderer:BrainRenderer.saveFigure:500 - Attempting to save figure to: C:\Users\utente\Desktop\Computing Methods\CMEPDA_project_2024\MATLAB\Mask Comparison\Plots\Mask_Overlap_Comparison.png
+2026-07-02 20:50:41.108 | SUCCESS  | BrainRenderer:BrainRenderer.saveFigure:503 - Figure saved successfully.
+2026-07-02 20:50:41.149 | INFO     | RunMaskComparison:RunMaskComparison:223 - --- Phase 4: VBM Analysis on Mean Mask and TPM Mask
+2026-07-02 20:50:41.235 | INFO     | BrainMask:BrainMask.exportToNifti:214 - Attempting to export Mean Mask to: C:\Users\utente\Desktop\Computing Methods\CMEPDA_project_2024\MATLAB\Mask Comparison\Results\Explicit Masks\explicit_mean_mask.nii
+2026-07-02 20:50:41.636 | SUCCESS  | BrainMask:BrainMask.exportToNifti:236 - Missing folder automatically created. NIfTI exported successfully.
+2026-07-02 20:50:41.658 | INFO     | BrainMask:BrainMask.exportToNifti:214 - Attempting to export TPM Mask to: C:\Users\utente\Desktop\Computing Methods\CMEPDA_project_2024\MATLAB\Mask Comparison\Results\Explicit Masks\explicit_tpm_mask.nii
+2026-07-02 20:50:41.704 | SUCCESS  | BrainMask:BrainMask.exportToNifti:221 - NIfTI file exported successfully.
+2026-07-02 20:50:41.858 | INFO     | VBMAnalysis:VBMAnalysis.twoSampleTTest:34 - Initializing SPM VBM Analysis...
+2026-07-02 20:50:49.902 | INFO     | VBMAnalysis:VBMAnalysis.twoSampleTTest:115 - SPM Batch successfully configured. Executing GLM...
+2026-07-02 20:53:27.167 | SUCCESS  | VBMAnalysis:VBMAnalysis.twoSampleTTest:120 - SPM GLM estimation completed successfully. Results saved in: C:\Users\utente\Desktop\Computing Methods\CMEPDA_project_2024\MATLAB\Mask Comparison\Results\Mean Mask VBM Results
+2026-07-02 20:53:27.545 | INFO     | VBMAnalysis:VBMAnalysis.getCorrectedMap:139 - Computing FWE correction (p<0.050) for contrast: Atrophy: CTRL > AD
+2026-07-02 20:53:28.165 | SUCCESS  | VBMAnalysis:VBMAnalysis.getCorrectedMap:222 - Statistical threshold computed successfully: T > 5.198
+2026-07-02 20:53:28.210 | INFO     | VBMAnalysis:VBMAnalysis.twoSampleTTest:34 - Initializing SPM VBM Analysis...
