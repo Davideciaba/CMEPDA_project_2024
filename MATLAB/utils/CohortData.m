@@ -1,0 +1,387 @@
+classdef CohortData < handle
+    % COHORTDATA Manages loading, caching, and grouping of VBM neuroimaging cohorts.
+    %
+    % PURPOSE: Parses clinical covariates from a CSV file and loads 3D NIfTI 
+    %   volumes from a single target directory. It automatically splits paths
+    %   and data tensors into sub-groups (AD vs CTRL) based on naming
+    %   conventions. It's possible to access the unified cohort or separated groups.
+    
+    properties (Access = public)
+        RootDirectory char     % Path to the directory containing all cohort data
+        CsvFileName char       % Exact name of the CSV file
+        CovariatesPath char    % Path to the clinical CSV file
+        CovariatesTable table  % Parsed clinical data table
+        ADFilePaths cell       % Absolute paths for AD group
+        CTRLFilePaths cell     % Absolute paths for CTRL group
+        AllFilePaths cell      % Combined paths for the entire cohort
+        ADVolumes single       % Cached 4D single tensor (X, Y, Z, N_AD)
+        CTRLVolumes single     % Cached 4D single tensor (X, Y, Z, N_CTRL)
+        AllVolumes single      % Combined 4D single tensor (X, Y, Z, N_ALL)
+    end
+
+    properties (Access=private)
+        PrivateLogger Logger   % Custom Logger
+    end
+    
+    methods (Access = public)
+        function obj = CohortData(dataDir, csvFileName, loggerObj)
+            % CONSTRUCTOR: Initializes the CohortData object
+            arguments
+                dataDir (1,:) char {mustBeNonempty}
+                csvFileName (1,:) char {mustBeNonempty}
+                loggerObj (1,1) Logger = Logger('NullLogger') % Fallback instantiation
+            end
+            obj.RootDirectory = dataDir;
+            obj.CsvFileName = csvFileName;
+            obj.PrivateLogger = loggerObj;
+        end
+        
+        function obj = scanDirectory(obj)
+            % METHOD: scanDirectory
+            % PURPOSE: Recursively finds covariates CSV and NIfTI files. 
+            %       The NIfTI files are categorized by group (AD or CTRL).
+            arguments
+                obj CohortData
+            end
+
+            obj.PrivateLogger.info('Recursive scan for %s in %s', obj.CsvFileName, obj.RootDirectory);
+            csvFiles = dir(fullfile(obj.RootDirectory, '**', obj.CsvFileName));
+            
+            % Fail Fast if CSV is missing
+            if isempty(csvFiles)
+                obj.PrivateLogger.error('File "%s" not found in the root directory or its subfolders.', obj.CsvFileName);
+                error('CohortData:CsvNotFound', 'The root directory contains no exact match for the specified CSV file.');
+            elseif numel(csvFiles) > 1
+                % Check for ambiguity
+                obj.PrivateLogger.error('Ambiguity detected: Found %d files named "%s".', numel(csvFiles), obj.CsvFileName);
+                error('CohortData:AmbiguousCsv', 'Multiple CSV files with the identical name found. Refusing to guess.');
+            end
+            
+            % Take the first CSV file, since we are sure it's exactly one
+            obj.CovariatesPath = fullfile(csvFiles(1).folder, csvFiles(1).name);
+            obj.PrivateLogger.success('Found clinical covariates file %s', csvFiles(1).name);
+            
+            obj.PrivateLogger.info('Recursive scan for NIfTI volumes in %s', obj.RootDirectory);
+            niiFiles = dir(fullfile(obj.RootDirectory, '**', 'smwc1*.nii'));
+            
+            % Fail Fast if no files are found
+            if isempty(niiFiles)
+                obj.PrivateLogger.error('No "smwc1*.nii" files found in the specified directory.');
+                error('CohortData:EmptyDirectory', 'The target directory contains no valid NIfTI files.');
+            end
+            
+            % Extract full paths
+            fileNames = {niiFiles.name};
+            obj.AllFilePaths = fullfile({niiFiles.folder}, fileNames);
+            
+            isAD = contains(fileNames, 'AD');
+            isCTRL = contains(fileNames, 'CTRL');
+            
+            obj.ADFilePaths = obj.AllFilePaths(isAD);
+            obj.CTRLFilePaths = obj.AllFilePaths(isCTRL);
+
+            if isempty(obj.ADFilePaths) || isempty(obj.CTRLFilePaths)
+                obj.PrivateLogger.error('Clinical group is empty. AD: %d, CTRL: %d.', numel(obj.ADFilePaths), numel(obj.CTRLFilePaths));
+                error('CohortData:EmptyClinicalGroup', 'Both clinical cohorts (AD and CTRL) must contain at least one file.');
+            end
+                
+            obj.PrivateLogger.success('Scan complete. Found: %d AD | %d CTRL | Total: %d', ...
+                numel(obj.ADFilePaths), numel(obj.CTRLFilePaths), numel(obj.AllFilePaths));
+        end
+
+        function refInfo = getReferenceInfo(obj)
+            % METHOD: getReferenceInfo
+            % PURPOSE: Returns spatial metadata (Affine Transform, ImageSize, 
+            %          and raw niftiinfo) from the first available volume.
+            arguments
+                obj CohortData
+            end
+            
+            obj.requireScannedState();
+
+            firstFilePath = obj.AllFilePaths{1};
+            
+            % NIfTI infos extraction
+            try
+                rawInfo = niftiinfo(firstFilePath);
+                refInfo.AffineTransform = rawInfo.Transform;
+                refInfo.ImageSize = rawInfo.ImageSize;
+                refInfo.RawNiftiInfo = rawInfo;
+
+                % Extract SPM affine matrix for SPM-SPM comparisons
+                if ~isempty(which('spm'))
+                    spmHdr = spm_vol(firstFilePath);
+                    refInfo.SpmMatrix = spmHdr.mat;
+                end
+
+                % Priority to SPM to avoid SPM-MATLAB comparison in TPM Mask alignment with the cohort
+                if isfield(refInfo, 'SpmMatrix') && ~isempty(refInfo.SpmMatrix)
+                    rawMat = refInfo.SpmMatrix;
+                else
+                    % Fallback to native MATLAB
+                    obj.PrivateLogger.warning('SPM matrix not found in cohort reference. Falling back to native MATLAB affine for spatial check.\n This may cause false-positive mismatches due to 0-based vs 1-based index offsets.');
+                    transformObj = refInfo.AffineTransform;
+                    if isobject(transformObj) || isstruct(transformObj)
+                        if isprop(transformObj, 'A') || isfield(transformObj, 'A')
+                            rawMat = transformObj.A;  % Newer MATLAB versions: affinetform3d
+                        else
+                            % Older MATLAB versions: affine3d
+                            rawMat = transformObj.T';
+                        end
+                    else
+                        % If it fails, assume it's already a raw matrix
+                        rawMat = transformObj;
+                    end
+                end
+                
+                % Enforce cast to double and store safely
+                refInfo.NumericMatrix = double(rawMat);
+
+            catch ME
+                obj.PrivateLogger.error('Failed to extract spatial info from: %s', firstFilePath);
+                rethrow(ME);
+            end
+            
+            obj.PrivateLogger.success('Reference spatial metadata successfully extracted.');
+        end
+        
+        function obj = loadData(obj)
+            % METHOD: loadVolumes
+            % PURPOSE: Loads clinical CSV and all 3D NIfTI files into RAM, organizing these one into grouped 4D tensors.
+            arguments
+                obj CohortData
+            end
+            
+            obj.requireScannedState();
+
+            obj.PrivateLogger.info('Loading clinical CSV data into memory...');
+            try
+                obj.CovariatesTable = readtable(obj.CovariatesPath);
+            catch ME
+                obj.PrivateLogger.error('Failed to read CSV. File not found or unreadable: %s', obj.CovariatesPath);
+                rethrow(ME);
+            end
+
+            % Check for required columns
+            requiredColumns = {'ID', 'Group', 'Age', 'Sex', 'MMSE', 'TIV'};
+            missingColumns = setdiff(requiredColumns, obj.CovariatesTable.Properties.VariableNames);
+            
+            if ~isempty(missingColumns)
+                missingStr = strjoin(missingColumns, ', ');
+                obj.PrivateLogger.error('CSV file is missing required columns: %s', missingStr);
+                error('CohortData:MissingCsvColumns', 'The CSV file must contain the following columns: %s', missingStr);
+            end
+            
+            % Type check for continuous variables
+            numericCols = {'Age', 'MMSE', 'TIV'};
+            for i = 1:numel(numericCols)
+                colName = numericCols{i};
+                if ~isnumeric(obj.CovariatesTable.(colName))
+                    obj.PrivateLogger.error('Column "%s" contains non-numeric data.', colName);
+                    error('CohortData:InvalidDataType', 'Column %s must strictly contain numeric data.', colName);
+                end
+            end
+            
+            % Convert Sex: 'M'->1, 'F'->0 (Crucial for VBM analysis)
+            if iscell(obj.CovariatesTable.Sex) || ischar(obj.CovariatesTable.Sex)
+                obj.PrivateLogger.info('Converting Sex covariate: M->1, F->0');
+                obj.CovariatesTable.Sex = double(strcmpi(obj.CovariatesTable.Sex, 'M')); 
+            elseif isnumeric(obj.CovariatesTable.Sex)
+                % Verify that the column is strictly binary [0, 1]
+                uniqueVals = unique(obj.CovariatesTable.Sex);
+                if ~all(ismember(uniqueVals, [0, 1]))
+                    obj.PrivateLogger.error('Sex column contains invalid values: %s', mat2str(uniqueVals'));
+                    error('CohortData:InvalidSexValues', 'Sex column must strictly contain only 0s and 1s.');
+                end
+            else
+                % VBM will crash later if we pass unprocessable data formats
+                obj.PrivateLogger.error('Sex column format is unrecognizable. Cannot proceed further.');
+                error('CohortData:InvalidSexFormat', 'Sex column must be explicitly strings (M/F) or numeric (1/0).');
+            end
+
+            refInfo = obj.getReferenceInfo();
+            imgSize = refInfo.ImageSize;
+
+            obj.PrivateLogger.info('Loading AD Volumes into memory...');
+            obj.ADVolumes = obj.loadGroupVolumes(obj.ADFilePaths, imgSize);
+            
+            obj.PrivateLogger.info('Loading CTRL Volumes into memory...');
+            obj.CTRLVolumes = obj.loadGroupVolumes(obj.CTRLFilePaths, imgSize);
+            
+            % Tensor concatenation
+            obj.AllVolumes = cat(4, obj.ADVolumes, obj.CTRLVolumes);
+            
+            % Data Alignment Check
+            numCsvRows = height(obj.CovariatesTable);
+            numNiftiFiles = size(obj.AllVolumes, 4);
+            
+            if numCsvRows ~= numNiftiFiles
+                obj.PrivateLogger.error('Data mismatch: %d CSV rows vs %d NIfTI files.', numCsvRows, numNiftiFiles);
+                error('CohortData:DataMismatch', 'Number of CSV rows does not match the number of loaded NIfTI volumes.');
+            end
+            
+            obj.PrivateLogger.success('All data successfully loaded into RAM and perfectly aligned (%d subjects).', numNiftiFiles);
+        end
+
+        function meanVol3D = getMeanVolume(obj, groupSelector)
+            % METHOD: getMeanVolume
+            % PURPOSE: Calculates and returns the 3D mean volume 
+            %   for the requested group.
+            arguments
+                obj CohortData
+                groupSelector (1,:) char {mustBeMember(groupSelector, {'AD', 'CTRL', 'ALL'})} = 'ALL'
+            end
+            obj.requireLoadedState();
+
+            % Retrieve the cached 4D tensor
+            vols4D = obj.getVolumes(groupSelector);
+            
+            % Calculate mean along the 4th dimension
+            meanVol3D = mean(vols4D, 4);
+        end
+
+        function subjVolume = getSubjVolume(obj, targetID)
+            % METHOD: getSubjVolume
+            % PURPOSE: Extracts the 3D data tensor for a specific single 
+            %   subject using its exact ID or filename substring (e.g., 'AD-1').
+            arguments
+                obj CohortData
+                targetID (1,:) char {mustBeNonempty}
+            end
+
+            obj.requireLoadedState();
+            
+            % String match search across all NIfTI paths
+            logicalIdx = contains(obj.AllFilePaths, targetID);
+            matchCount = sum(logicalIdx);
+            
+            % Fail fast against missing or ambiguous targets
+            if matchCount == 0
+                obj.PrivateLogger.error('Subject ID "%s" not found in any loaded NIfTI files.', targetID);
+                error('CohortData:SubjectNotFound', 'Could not find any NIfTI file matching the ID: %s', targetID);
+            elseif matchCount > 1
+                obj.PrivateLogger.error('Ambiguous Subject ID: "%s" matched %d files.', targetID, matchCount);
+                error('CohortData:AmbiguousSubjectID', 'The provided ID "%s" is too generic and matched multiple files.', targetID);
+            end
+            
+            % Exact index extraction
+            exactIndex = find(logicalIdx);
+            subjVolume = obj.AllVolumes(:, :, :, exactIndex);
+        end
+        
+        function filePaths = getFilePaths(obj, groupSelector)
+            % METHOD: getFilePaths
+            % PURPOSE: Returns the requested group paths (AD, CTRL, or ALL).
+            arguments
+                obj CohortData
+                groupSelector (1,:) char {mustBeMember(groupSelector, {'AD', 'CTRL', 'ALL'})}
+            end
+            
+            obj.requireScannedState();
+            switch groupSelector
+                case 'AD'
+                    filePaths = obj.ADFilePaths;
+                case 'CTRL'
+                    filePaths = obj.CTRLFilePaths;
+                case 'ALL'
+                    filePaths = obj.AllFilePaths;
+            end
+        end
+        
+        function volumes = getVolumes(obj, groupSelector)
+            % METHOD: getVolumes
+            % PURPOSE: Retrieves the pre-loaded 4D data tensor for the specified clinical group (AD, CTRL, or ALL).
+            arguments
+                obj CohortData
+                groupSelector (1,:) char {mustBeMember(groupSelector, {'AD', 'CTRL', 'ALL'})}
+            end
+            obj.requireLoadedState();
+            switch groupSelector
+                case 'AD'
+                    volumes = obj.ADVolumes;
+                case 'CTRL'
+                    volumes = obj.CTRLVolumes;
+                case 'ALL'
+                    volumes = obj.AllVolumes;
+            end
+        end
+
+        function csvPath = getCovariatesPath(obj)
+            % METHOD: getCovariatesPath
+            % PURPOSE: Returns the path to the clinical covariates CSV file.
+            arguments
+                obj CohortData
+            end
+
+            obj.requireScannedState();
+            
+            csvPath = obj.CovariatesPath;
+        end
+
+        function covTable = getCovariatesTable(obj)
+            % METHOD: getCovariatesTable
+            % PURPOSE: Retrieves the pre-loaded clinical data table.
+            arguments
+                obj CohortData
+            end
+
+            obj.requireLoadedState();
+            
+            covTable = obj.CovariatesTable;
+        end
+    end
+
+    methods (Access = private)
+        
+        function requireScannedState(obj)
+            % HELPER: requireScannedState
+            % PURPOSE: State Validator for Directory Scanning
+            if isempty(obj.AllFilePaths) || isempty(obj.CovariatesPath)
+                obj.PrivateLogger.error('Method called before scanDirectory().');
+                error('CohortData:StateError', 'You must call scanDirectory() before using this method.');
+            end
+        end
+
+        function requireLoadedState(obj)
+            % HELPER: requireLoadedState
+            % PURPOSE: State Validator for Data Loading
+            if isempty(obj.AllVolumes) || isempty(obj.CovariatesTable)
+                obj.PrivateLogger.error('Method called before loadData().');
+                error('CohortData:StateError', 'You must call loadData() before accessing tensors or covariates.');
+            end
+        end
+
+        function groupTensor4D = loadGroupVolumes(obj, pathCellArray, imgSize)
+            % HELPER: loadGroupVolumes
+            % PURPOSE: Loads volumes from paths into a 4D tensor
+            numFiles = numel(pathCellArray);
+            
+            % Pre-allocate the 4D tensor
+            groupTensor4D = zeros([imgSize, numFiles], 'single');
+
+            step = max(1, floor(numFiles/4));
+
+            % Iterate and load
+            for i = 1:numFiles
+                if mod(i, step) == 0
+                    obj.PrivateLogger.debug('Loading subjects. Progress: %d / %d (%.0f%%)', i, numFiles, (i/numFiles)*100);
+                end
+                currentPath = pathCellArray{i};
+                try
+                    vol = niftiread(currentPath);
+                    groupTensor4D(:,:,:,i) = single(vol);
+                catch ME
+                    % Catch corrupted files during batch load and throw
+                    % error. If one corrupted NIfTI file is detected, the
+                    % user should delete it and delete the corresponding
+                    % row in CSV file too
+                    obj.PrivateLogger.error('Corrupted NIfTI file detected at index %d: %s', i, currentPath);
+                    rethrow(ME);
+                end
+            end
+            
+            % Clean up NaNs
+            groupTensor4D(isnan(groupTensor4D)) = 0;
+        end
+    end
+end
