@@ -1,37 +1,38 @@
-2026-07-02 15:29:51.355 | SUCCESS  | RunVBMPipeline:RunVBMPipeline:73 - File logging successfully initialized at: C:\Users\utente\Desktop\Computing Methods\CMEPDA_project_2024\MATLAB\VBM Pipeline\Log Files\VBMPipeline.log
-2026-07-02 15:29:51.373 | INFO     | RunVBMPipeline:RunVBMPipeline:80 - --- Phase 1: Data Loading and Grouping ---
-2026-07-02 15:29:51.426 | INFO     | CohortData:CohortData.scanDirectory:47 - Recursive scan for covariateADCTRLsexAgeTIV.csv in C:\Users\utente\Desktop\Computing Methods\CMEPDA_project_2024\AD_CTRL
-2026-07-02 15:29:51.452 | SUCCESS  | CohortData:CohortData.scanDirectory:62 - Found clinical covariates file covariateADCTRLsexAgeTIV.csv
-2026-07-02 15:29:51.464 | INFO     | CohortData:CohortData.scanDirectory:64 - Recursive scan for NIfTI volumes in C:\Users\utente\Desktop\Computing Methods\CMEPDA_project_2024\AD_CTRL
-2026-07-02 15:29:51.490 | SUCCESS  | CohortData:CohortData.scanDirectory:88 - Scan complete. Found: 144 AD | 189 CTRL | Total: 333
-2026-07-02 15:29:51.504 | INFO     | CohortData:CohortData.loadData:157 - Loading clinical CSV data into memory...
-2026-07-02 15:29:51.550 | INFO     | CohortData:CohortData.loadData:187 - Converting Sex covariate: M->1, F->0
-2026-07-02 15:29:51.578 | SUCCESS  | CohortData:CohortData.getReferenceInfo:145 - Reference spatial metadata successfully extracted.
-2026-07-02 15:29:51.583 | INFO     | CohortData:CohortData.loadData:205 - Loading AD Volumes into memory...
-2026-07-02 15:29:52.298 | DEBUG    | CohortData:CohortData.loadGroupVolumes:367 - Loading subjects. Progress: 36 / 144 (25%)
-2026-07-02 15:29:53.059 | DEBUG    | CohortData:CohortData.loadGroupVolumes:367 - Loading subjects. Progress: 72 / 144 (50%)
-2026-07-02 15:29:53.783 | DEBUG    | CohortData:CohortData.loadGroupVolumes:367 - Loading subjects. Progress: 108 / 144 (75%)
-2026-07-02 15:29:54.866 | DEBUG    | CohortData:CohortData.loadGroupVolumes:367 - Loading subjects. Progress: 144 / 144 (100%)
-2026-07-02 15:29:55.277 | INFO     | CohortData:CohortData.loadData:208 - Loading CTRL Volumes into memory...
-2026-07-02 15:29:56.250 | DEBUG    | CohortData:CohortData.loadGroupVolumes:367 - Loading subjects. Progress: 47 / 189 (25%)
-2026-07-02 15:29:57.324 | DEBUG    | CohortData:CohortData.loadGroupVolumes:367 - Loading subjects. Progress: 94 / 189 (50%)
-2026-07-02 15:29:58.529 | DEBUG    | CohortData:CohortData.loadGroupVolumes:367 - Loading subjects. Progress: 141 / 189 (75%)
-2026-07-02 15:30:00.293 | DEBUG    | CohortData:CohortData.loadGroupVolumes:367 - Loading subjects. Progress: 188 / 189 (99%)
-2026-07-02 15:30:19.164 | SUCCESS  | CohortData:CohortData.loadData:223 - All data successfully loaded into RAM and perfectly aligned (333 subjects).
-2026-07-02 15:30:20.912 | SUCCESS  | CohortData:CohortData.getReferenceInfo:145 - Reference spatial metadata successfully extracted.
-2026-07-02 15:30:21.046 | INFO     | RunVBMPipeline:RunVBMPipeline:96 - --- Phase 2: TPM Mask Generation ---
-2026-07-02 15:30:21.962 | INFO     | BrainMask:BrainMask.loadTpmVolume:255 - Attempting to load SPM Tissue Probability Map (TPM) from: C:\Users\utente\Desktop\spm\tpm\TPM.nii
-2026-07-02 15:30:22.274 | INFO     | BrainMask:BrainMask.loadTpmVolume:260 - Detected a 4D NIfTI file with 6 volumes. Forcing extraction of Volume 1 (Gray Matter).
-2026-07-02 15:30:22.757 | SUCCESS  | BrainMask:BrainMask.computeTpmMask:105 - TPM Mask computed successfully (Threshold: 0.010)
-2026-07-02 15:30:22.883 | INFO     | BrainMask:BrainMask.exportToNifti:214 - Attempting to export TPM Mask to: C:\Users\utente\Desktop\Computing Methods\CMEPDA_project_2024\MATLAB\VBM Pipeline\Results\Explicit Mask\explicit_tpm_mask.nii
-2026-07-02 15:30:23.604 | SUCCESS  | BrainMask:BrainMask.exportToNifti:236 - Missing folder automatically created. NIfTI exported successfully.
-2026-07-02 15:30:23.630 | INFO     | RunVBMPipeline:RunVBMPipeline:110 - --- Phase 3: VBM Analysis on TPM Mask ---
-2026-07-02 15:30:24.098 | INFO     | VBMAnalysis:VBMAnalysis.twoSampleTTest:34 - Initializing SPM VBM Analysis...
-2026-07-02 15:30:39.478 | INFO     | VBMAnalysis:VBMAnalysis.twoSampleTTest:115 - SPM Batch successfully configured. Executing GLM...
-2026-07-02 15:33:06.867 | SUCCESS  | VBMAnalysis:VBMAnalysis.twoSampleTTest:120 - SPM GLM estimation completed successfully. Results saved in: C:\Users\utente\Desktop\Computing Methods\CMEPDA_project_2024\MATLAB\VBM Pipeline\Results\VBM Results
-2026-07-02 15:33:06.991 | INFO     | VBMAnalysis:VBMAnalysis.getCorrectedMap:139 - Computing FWE correction (p<0.050) for contrast: Atrophy: CTRL > AD
-2026-07-02 15:33:07.390 | SUCCESS  | VBMAnalysis:VBMAnalysis.getCorrectedMap:222 - Statistical threshold computed successfully: T > 5.208
-2026-07-02 15:33:07.421 | INFO     | RunVBMPipeline:RunVBMPipeline:127 - --- Phase 4: Plot statistical results on a background volume ---
-2026-07-02 15:33:26.215 | INFO     | BrainRenderer:BrainRenderer.saveFigure:500 - Attempting to save figure to: C:\Users\utente\Desktop\Computing Methods\CMEPDA_project_2024\MATLAB\VBM Pipeline\Plots\VBM_TPM_Mask_FWE_p005.png
-2026-07-02 15:33:36.283 | SUCCESS  | BrainRenderer:BrainRenderer.saveFigure:515 - Folder created and figure saved successfully.
-2026-07-02 15:33:36.318 | SUCCESS  | RunVBMPipeline:RunVBMPipeline:142 - VBM Pipeline successfully completed!
+2026-07-03 00:43:44.592 | SUCCESS  | RunVBMPipeline:RunVBMPipeline:73 - File logging successfully initialized at: C:\Users\utente\Desktop\Computing Methods\CMEPDA_project_2024\MATLAB\VBM Pipeline\Log Files\VBMPipeline.log
+2026-07-03 00:43:44.604 | INFO     | RunVBMPipeline:RunVBMPipeline:80 - --- Phase 1: Data Loading and Grouping ---
+2026-07-03 00:43:44.625 | INFO     | CohortData:CohortData.scanDirectory:47 - Recursive scan for covariateADCTRLsexAgeTIV.csv in C:\Users\utente\Desktop\Computing Methods\CMEPDA_project_2024\AD_CTRL
+2026-07-03 00:43:44.647 | SUCCESS  | CohortData:CohortData.scanDirectory:62 - Found clinical covariates file covariateADCTRLsexAgeTIV.csv
+2026-07-03 00:43:44.655 | INFO     | CohortData:CohortData.scanDirectory:64 - Recursive scan for NIfTI volumes in C:\Users\utente\Desktop\Computing Methods\CMEPDA_project_2024\AD_CTRL
+2026-07-03 00:43:44.689 | SUCCESS  | CohortData:CohortData.scanDirectory:88 - Scan complete. Found: 144 AD | 189 CTRL | Total: 333
+2026-07-03 00:43:44.702 | INFO     | CohortData:CohortData.loadData:157 - Loading clinical CSV data into memory...
+2026-07-03 00:43:44.917 | INFO     | CohortData:CohortData.loadData:187 - Converting Sex covariate: M->1, F->0
+2026-07-03 00:43:44.986 | SUCCESS  | CohortData:CohortData.getReferenceInfo:145 - Reference spatial metadata successfully extracted.
+2026-07-03 00:43:44.993 | INFO     | CohortData:CohortData.loadData:205 - Loading AD Volumes into memory...
+2026-07-03 00:43:45.708 | DEBUG    | CohortData:CohortData.loadGroupVolumes:367 - Loading subjects. Progress: 36 / 144 (25%)
+2026-07-03 00:43:46.450 | DEBUG    | CohortData:CohortData.loadGroupVolumes:367 - Loading subjects. Progress: 72 / 144 (50%)
+2026-07-03 00:43:47.861 | DEBUG    | CohortData:CohortData.loadGroupVolumes:367 - Loading subjects. Progress: 108 / 144 (75%)
+2026-07-03 00:43:48.604 | DEBUG    | CohortData:CohortData.loadGroupVolumes:367 - Loading subjects. Progress: 144 / 144 (100%)
+2026-07-03 00:43:48.865 | INFO     | CohortData:CohortData.loadData:208 - Loading CTRL Volumes into memory...
+2026-07-03 00:43:49.819 | DEBUG    | CohortData:CohortData.loadGroupVolumes:367 - Loading subjects. Progress: 47 / 189 (25%)
+2026-07-03 00:43:51.031 | DEBUG    | CohortData:CohortData.loadGroupVolumes:367 - Loading subjects. Progress: 94 / 189 (50%)
+2026-07-03 00:43:52.310 | DEBUG    | CohortData:CohortData.loadGroupVolumes:367 - Loading subjects. Progress: 141 / 189 (75%)
+2026-07-03 00:43:54.092 | DEBUG    | CohortData:CohortData.loadGroupVolumes:367 - Loading subjects. Progress: 188 / 189 (99%)
+2026-07-03 00:44:12.998 | SUCCESS  | CohortData:CohortData.loadData:223 - All data successfully loaded into RAM and perfectly aligned (333 subjects).
+2026-07-03 00:44:15.455 | SUCCESS  | CohortData:CohortData.getReferenceInfo:145 - Reference spatial metadata successfully extracted.
+2026-07-03 00:44:15.524 | INFO     | RunVBMPipeline:RunVBMPipeline:96 - --- Phase 2: TPM Mask Generation ---
+2026-07-03 00:44:16.206 | INFO     | BrainMask:BrainMask.loadTpmVolume:255 - Attempting to load SPM Tissue Probability Map (TPM) from: C:\Users\utente\Desktop\spm\tpm\TPM.nii
+2026-07-03 00:44:17.269 | INFO     | BrainMask:BrainMask.loadTpmVolume:260 - Detected a 4D NIfTI file with 6 volumes. Forcing extraction of Volume 1 (Gray Matter).
+2026-07-03 00:44:17.952 | SUCCESS  | BrainMask:BrainMask.computeTpmMask:105 - TPM Mask computed successfully (Threshold: 0.010)
+2026-07-03 00:44:18.158 | INFO     | BrainMask:BrainMask.getMaskStats:173 - TPM Mask has 627444 active voxels (29.56% of total volume).
+2026-07-03 00:44:18.323 | INFO     | BrainMask:BrainMask.exportToNifti:214 - Attempting to export TPM Mask to: C:\Users\utente\Desktop\Computing Methods\CMEPDA_project_2024\MATLAB\VBM Pipeline\Results\Explicit Mask\explicit_tpm_mask.nii
+2026-07-03 00:44:19.167 | SUCCESS  | BrainMask:BrainMask.exportToNifti:236 - Missing folder automatically created. NIfTI exported successfully.
+2026-07-03 00:44:19.203 | INFO     | RunVBMPipeline:RunVBMPipeline:113 - --- Phase 3: VBM Analysis on TPM Mask ---
+2026-07-03 00:44:19.523 | INFO     | VBMAnalysis:VBMAnalysis.twoSampleTTest:34 - Initializing SPM VBM Analysis...
+2026-07-03 00:44:37.375 | INFO     | VBMAnalysis:VBMAnalysis.twoSampleTTest:115 - SPM Batch successfully configured. Executing GLM...
+2026-07-03 00:46:49.654 | SUCCESS  | VBMAnalysis:VBMAnalysis.twoSampleTTest:120 - SPM GLM estimation completed successfully. Results saved in: C:\Users\utente\Desktop\Computing Methods\CMEPDA_project_2024\MATLAB\VBM Pipeline\Results\VBM Results
+2026-07-03 00:46:50.024 | INFO     | VBMAnalysis:VBMAnalysis.getCorrectedMap:139 - Computing FWE correction (p<0.050) for contrast: Atrophy: CTRL > AD
+2026-07-03 00:46:50.356 | SUCCESS  | VBMAnalysis:VBMAnalysis.getCorrectedMap:222 - Statistical threshold computed successfully: T > 5.208
+2026-07-03 00:46:50.382 | INFO     | RunVBMPipeline:RunVBMPipeline:130 - --- Phase 4: Plot statistical results on a background volume ---
+2026-07-03 00:47:05.552 | INFO     | BrainRenderer:BrainRenderer.saveFigure:500 - Attempting to save figure to: C:\Users\utente\Desktop\Computing Methods\CMEPDA_project_2024\MATLAB\VBM Pipeline\Plots\VBM_TPM_Mask_FWE_p005.png
+2026-07-03 00:47:12.929 | SUCCESS  | BrainRenderer:BrainRenderer.saveFigure:515 - Folder created and figure saved successfully.
+2026-07-03 00:47:12.961 | SUCCESS  | RunVBMPipeline:RunVBMPipeline:145 - VBM Pipeline successfully completed!

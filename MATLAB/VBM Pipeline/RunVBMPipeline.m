@@ -100,6 +100,9 @@ tpmMask = BrainMask(refInfo, logger);
 absThreshold = 0.01;
 tpmMask.computeTpmMask(tpmPath, absThreshold);
 
+% Show TPM Mask Stats
+tpmStats = tpmMask.getMaskStats;
+
 % Export TPM Mask as NIfTI file
 maskDir = fullfile(resultsDir, 'Explicit Mask');
 tpmMaskPath = fullfile(maskDir, 'explicit_tpm_mask.nii');
