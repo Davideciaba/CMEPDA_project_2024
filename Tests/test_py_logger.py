@@ -20,7 +20,7 @@ parent_dir= current_dir.parent
 sys.path.insert(0, str(parent_dir))
 
 # Import the target module
-import py_logger
+import py_logger 
 
 class TestCustomLogger(unittest.TestCase):
     """
