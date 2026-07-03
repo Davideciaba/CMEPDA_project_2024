@@ -17,7 +17,8 @@
 %   optimized threshold for Mean and TPM Masks is computed.
 %   These five Mask strategies are compared with different metrics:
 %       - Number of active voxels (benchmark: 6.5x10^5)
-%       - Voxel leakage across clinical groups (AD vs. CTRL)
+%       - Voxel leakage across clinical groups (AD vs. CTRL) against an
+%       absolute threshold of 0.01
 %       - Mask Overlay on the middle slice with 2 (AD-4 and CTRL-117) similar subjects and
 %       the Mean Volume
 %       - Voxel distribution histograms with 2 (AD-4 and CTRL-117) similar subjects and

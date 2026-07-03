@@ -189,11 +189,11 @@ classdef BrainMask < handle
 
             maskSize = sum(obj.Matrix(:)); 
             
-            % Compute the background voxels of each cohort/group subject that
+            % Compute the background (intensity < 0.01) voxels of each cohort/group subject that
             % are in the mask. Uses MATLAB Implicit Expansion which allows 
             % operations between a 3D tensor and a 4D tensor by copying the
             % former along the 4th dimension.
-            leakedVoxels4D = (obj.Matrix == true) & (vols4D == 0);
+            leakedVoxels4D = (obj.Matrix == true) & (vols4D < 0.01);
             
             % Sum across spatial dimensions (X, Y and Z) and squeeze it
             leakedPerSubject = squeeze(sum(leakedVoxels4D, [1, 2, 3]));
