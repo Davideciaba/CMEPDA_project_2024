@@ -8,7 +8,6 @@ Multi-GPU DataParallel scaling, and decoupled atomic methods for training, valid
 Designed as a pure library module without global execution blocks.
 """
 import os
-import sys
 import multiprocessing
 import numpy as np
 import pandas as pd
@@ -64,10 +63,6 @@ class CNNPredictiveEngine:
     def load_data_dicts(csv_path: str) -> Tuple[np.ndarray, List[Dict[str, Any]], np.ndarray]:
         """
         Generates lightweight Dictionary pointers mapping strings to disk assets.
-
-        Purpose:
-            Prevents OS memory saturation via Lazy Loading. Generates file coordinate mappings 
-            instead of loading massive 3D arrays into RAM. Data is read incrementally during epochs.
         """
         if not os.path.exists(csv_path):
             raise FileNotFoundError(f"Missing registry CSV file: {csv_path}")
@@ -79,7 +74,6 @@ class CNNPredictiveEngine:
             lbl = int(row['label'])
             subjects.append(str(row['subject_id']))
             y_list.append(lbl)
-            # Standard Dictionary format requested by MONAI Datasets
             data_dicts.append({"image": row['file_path'], "label": lbl})
             
         return np.array(subjects), data_dicts, np.array(y_list)
@@ -105,10 +99,7 @@ class CNNPredictiveEngine:
         }
 
     def _get_transforms(self) -> Compose:
-        """
-        Defines the MONAI data-stream preprocessing queue.
-        Purpose: Ensures channel dimensions (1, D, H, W) and standardizes MR intensities.
-        """
+        """Defines the MONAI data-stream preprocessing queue."""
         keys = ["image"]
         transforms = []
         if not self.is_dummy:
@@ -129,15 +120,11 @@ class CNNPredictiveEngine:
         return DataLoader(dataset, batch_size=batch_size, shuffle=shuffle, num_workers=num_workers, pin_memory=pin_memory, drop_last=drop_last)
 
     def _train_epoch(self, model: nn.Module, loader: DataLoader, optimizer: optim.Optimizer, criterion: nn.Module) -> float:
-        """
-        Executes a single Training Epoch (Forward and Backward pass).
-        Updates network weights and returns the average batch loss.
-        """
+        """Executes a single Training Epoch (Forward and Backward pass)."""
         model.train()
         epoch_loss = 0.0
         
         for batch_data in loader:
-            # WHY: non_blocking=True allows async memory transfers to the GPU, preventing CPU starvation.
             inputs = batch_data["image"].to(self.device, non_blocking=True)
             labels = batch_data["label"].to(self.device, non_blocking=True)
             
@@ -152,10 +139,7 @@ class CNNPredictiveEngine:
         return epoch_loss / max(1, len(loader))
 
     def _validate_epoch(self, model: nn.Module, loader: DataLoader, criterion: nn.Module) -> float:
-        """
-        Executes a single Validation Epoch.
-        Freezes the Autograd engine to save VRAM and evaluates on unseen folds.
-        """
+        """Executes a single Validation Epoch."""
         model.eval()
         val_loss = 0.0
         
@@ -182,9 +166,7 @@ class CNNPredictiveEngine:
         with torch.no_grad():
             for batch_data in loader:
                 logits = model(batch_data["image"].to(self.device, non_blocking=True))
-                # WHY: Extracts probability of the positive class (AD) via Softmax index 1
                 all_probs.extend(torch.softmax(logits, dim=1)[:, 1].cpu().numpy())
-                # Evaluates the class with the highest probability
                 all_preds.extend(torch.argmax(logits, dim=1).cpu().numpy())
                 
         return np.array(all_preds), np.array(all_probs)
@@ -217,7 +199,6 @@ class CNNPredictiveEngine:
                         optimizer_cv = optim.AdamW(model_cv.parameters(), lr=lr, weight_decay=wd)
                         criterion_cv = nn.CrossEntropyLoss()
                         
-                        # Fast tuning mode: run 3 epochs of training, evaluate only at the end
                         for _ in range(3):
                             self._train_epoch(model_cv, in_tr_loader, optimizer_cv, criterion_cv)
                         
@@ -244,22 +225,18 @@ class CNNPredictiveEngine:
                 self._train_epoch(model, tr_loader, optimizer, criterion)
                 val_loss = self._validate_epoch(model, val_loader, criterion)
                 
-                # Early Stopping Checkpoint Logic
                 if val_loss < best_val_loss:
                     best_val_loss, epochs_no_improve = val_loss, 0
-                    # Deep copy of weights to avoid GPU state drifts
                     best_state = {k: v.cpu().clone() for k, v in model.state_dict().items()}
                 else:
                     epochs_no_improve += 1
                     if patience and epochs_no_improve >= patience:
-                        self.logger.debug(f"Early Stopping triggered at epoch {epoch+1}")
                         break
             
             if best_state: 
                 model.load_state_dict(best_state)
 
             # --- OUTER CV: Out-of-Sample Predictive Evaluation ---
-            # Utilizing the decoupled inference method
             y_pred, y_prob = self.predict(model, te_loader)
             
             metrics = self._evaluate_classification(y_test, y_pred, y_prob)

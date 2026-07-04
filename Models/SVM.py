@@ -5,10 +5,9 @@ This module houses the fully encapsulated Support Vector Machine pipeline.
 It incorporates decoupled atomic methods for training (GridSearch tuning) 
 and pure inference, ensuring API uniformity with the Deep Learning ecosystem.
 
-Designed as a pure library module without global execution blocks.
+Designed as a pure library module without global execution blocks or manual path injections.
 """
 import os
-import sys
 import numpy as np
 import pandas as pd
 import nibabel as nib
@@ -22,12 +21,6 @@ from sklearn.metrics import (
     f1_score, 
     confusion_matrix
 )
-
-# --- Path Injection ---
-current_dir = os.path.dirname(os.path.abspath(__file__))
-parent_dir = os.path.abspath(os.path.join(current_dir, '..'))
-if parent_dir not in sys.path:
-    sys.path.append(parent_dir)
 
 from py_logger import CustomLogger
 
@@ -58,6 +51,9 @@ class SVMPredictiveEngine:
             raise FileNotFoundError(f"Missing Data files:\nCSV: {csv_path}\nMASK: {mask_path}")
 
         df = pd.read_csv(csv_path)
+        
+        # WHY: Pre-loading the mask as a boolean matrix enables vectorized NumPy 
+        # indexing, eliminating slow triple nested loops (X, Y, Z).
         mask_bool = nib.load(mask_path).get_fdata() > 0
         
         subjects, X_list, y_list = [], [], []
@@ -65,6 +61,8 @@ class SVMPredictiveEngine:
             subjects.append(str(row['subject_id']))
             y_list.append(int(row['label']))
             img_data = nib.load(row['file_path']).get_fdata()
+            
+            # WHY: Boolean Indexing directly extracts the valid values into a 1D vector.
             X_list.append(img_data[mask_bool])
             
         return np.array(subjects), np.array(X_list), np.array(y_list)
@@ -114,11 +112,8 @@ class SVMPredictiveEngine:
         Accepts a trained model and a feature matrix, returning discrete predictions 
         and continuous probabilities safely.
         """
-        # WHY: Wrapping scikit-learn's native methods provides a uniform interface 
-        # identical to the Deep Learning engine, allowing polymorphic orchestration.
         y_pred = model.predict(X_test)
         y_prob = model.predict_proba(X_test)[:, 1]
-        
         return y_pred, y_prob
 
     def execute_nested_cv(self, X: np.ndarray, y: np.ndarray, subjects: np.ndarray) -> Tuple[pd.DataFrame, List[Dict[str, Any]]]:
@@ -137,13 +132,9 @@ class SVMPredictiveEngine:
             X_train, X_test = X[train_idx], X[test_idx]
             y_train, y_test = y[train_idx], y[test_idx]
             
-            # --- Training Phase ---
             best_c, best_model = self.train(X_train, y_train)
-            
-            # --- Inference Phase ---
             y_pred, y_prob = self.predict(best_model, X_test)
 
-            # --- Evaluation Phase ---
             metrics = self._evaluate_classification(y_test, y_pred, y_prob)
             metrics['Fold'] = fold_idx
             fold_metrics_list.append(metrics)

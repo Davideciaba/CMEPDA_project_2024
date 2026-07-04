@@ -2,8 +2,8 @@
 Unit and Integration Testing Suite for the CNN Predictive Engine.
 
 Validates the decoupled atomic primitives (`_train_epoch`, `_validate_epoch`, `predict`)
-and ensures the Double CV pipeline executes securely. Integrates CustomLogger 
-and Dummy Tensor Generation for full E2E assessment.
+and ensures the Double CV pipeline executes securely. 
+Designed for a flat directory structure (tests and models in the same folder).
 """
 import unittest
 from unittest.mock import patch
@@ -12,13 +12,7 @@ import pandas as pd
 import torch
 import torch.nn as nn
 
-import sys
-import os
-
-# --- Path Injection for Testing ---
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
-
-from Models.EfficientNet import CNNPredictiveEngine
+from EfficientNet import CNNPredictiveEngine
 from py_logger import CustomLogger
 
 class TestCNNEngine(unittest.TestCase):
@@ -31,7 +25,6 @@ class TestCNNEngine(unittest.TestCase):
         
         self.engine = CNNPredictiveEngine(logger=self.logger, device=self.device, is_dummy=True, inner_folds=2, outer_folds=2)
         
-        # Base 64x64x64 tensors to satisfy EfficientNet spatial convolutions
         self.data_dicts = [
             {"image": torch.randn(1, 64, 64, 64), "label": torch.tensor(0, dtype=torch.long)},
             {"image": torch.randn(1, 64, 64, 64), "label": torch.tensor(1, dtype=torch.long)}
@@ -55,24 +48,25 @@ class TestCNNEngine(unittest.TestCase):
         """Verifies the decoupled training epoch correctly updates the gradient graph."""
         t_loss = self.engine._train_epoch(self.model, self.loader, self.optimizer, self.criterion)
         self.assertIsInstance(t_loss, float)
-        self.assertTrue(t_loss > 0, "Loss must be positive during training.")
+        self.assertTrue(t_loss > 0)
 
     def test_validate_epoch(self):
         """Verifies the decoupled validation epoch safely executes without tracking gradients."""
         v_loss = self.engine._validate_epoch(self.model, self.loader, self.criterion)
         self.assertIsInstance(v_loss, float)
-        self.assertTrue(v_loss > 0, "Loss must be positive during validation.")
+        self.assertTrue(v_loss > 0)
 
     def test_predict_method(self):
         """Validates the pure inference API required for future XAI operations."""
         y_pred, y_prob = self.engine.predict(self.model, self.loader)
         
-        self.assertEqual(len(y_pred), 2, "Predictions must match the batch sample size.")
-        self.assertEqual(len(y_prob), 2, "Probabilities must match the batch sample size.")
-        self.assertTrue(all(0.0 <= p <= 1.0 for p in y_prob), "Probabilities must be bounded [0, 1].")
+        self.assertEqual(len(y_pred), 2)
+        self.assertEqual(len(y_prob), 2)
+        self.assertTrue(all(0.0 <= p <= 1.0 for p in y_prob))
 
-    @patch('Models.EfficientNet.os.path.exists')
-    @patch('Models.EfficientNet.pd.read_csv')
+    # I target dei patch ora puntano al namespace locale "EfficientNet"
+    @patch('EfficientNet.os.path.exists')
+    @patch('EfficientNet.pd.read_csv')
     def test_load_data_dicts_mocked(self, mock_read_csv, mock_exists):
         """Mocks the OS file system to validate the generation of Lazy Loading pointers."""
         mock_exists.return_value = True
@@ -96,8 +90,8 @@ class TestCNNEngine(unittest.TestCase):
             
             data_dicts = [{"image": torch.randn(1, D, H, W, dtype=torch.float32), "label": int(lbl)} for lbl in y_data]
             
-            # Override internal grid to limit testing computational time
-            import Models.EfficientNet as EN
+            # Import locale per l'override della griglia
+            import EfficientNet as EN
             EN.CNN_LR_GRID = [1e-3]
             EN.CNN_WD_GRID = [1e-4]
             
@@ -106,8 +100,7 @@ class TestCNNEngine(unittest.TestCase):
             )
             
             self.assertIsInstance(df_metrics, pd.DataFrame)
-            self.assertEqual(len(df_metrics), 2, "Must process 2 outer folds.")
-
+            self.assertEqual(len(df_metrics), 2)
 
 if __name__ == '__main__':
     unittest.main()
