@@ -1,25 +1,51 @@
 """
-Module: test_xai_efficientnet.py
+Module: test_XAI_EfficientNet.py
 
 Unit testing suite targeting the DLExplainableAI class.
-Employs flat direct imports. Integrates natively with the actual CNNPredictiveEngine 
-to validate gradient backpropagation directly on the project's MONAI EfficientNet topology.
+Employs a bulletproof path injection to reliably locate project namespaces.
 """
+import sys
+import os
+
+# --- BULLETPROOF PATH INJECTION ---
+# Catturiamo il percorso assoluto in cui si trova QUESTO file (la cartella Tests)
+current_dir = os.path.dirname(os.path.abspath(__file__))
+
+# Saliamo di un livello. In base a come hai strutturato il progetto, 
+# questo dovrebbe portarci dentro CMEPDA_project_2024 o dentro Python
+parent_dir = os.path.abspath(os.path.join(current_dir, '..'))
+
+# Se c'è una sottocartella 'Python', quella è la nostra root dei moduli.
+# Altrimenti, la root è la parent_dir stessa.
+python_src_dir = os.path.join(parent_dir, 'Python')
+
+if os.path.exists(python_src_dir) and python_src_dir not in sys.path:
+    sys.path.insert(0, python_src_dir)
+elif parent_dir not in sys.path:
+    sys.path.insert(0, parent_dir)
+
+# =====================================================================
+# DEBUG: Decommenta questa riga se l'errore persiste, 
+# stamperà esattamente dove Python sta cercando i file.
+# print("PYTHON PATH ATTUALI:", sys.path)
+# =====================================================================
+
 import unittest
 import numpy as np
 import torch
-import torch.nn as nn
-from unittest.mock import MagicMock
 
-# Importazioni locali dalla cartella unificata Models
-from XAI_EfficientNet import DLExplainableAI
-from py_logger import CustomLogger
+# Importiamo dai rispettivi package della struttura del progetto
+from XAI.XAI_EfficientNet import DLExplainableAI
+
+from Models.efficientnet_classifier import EfficientNetClassifier as ModelEngine
+
+from utils.py_logger import CustomLogger
 
 
 class TestDLExplainableAI(unittest.TestCase):
 
     def setUp(self):
-        """Initializes the engine with strict CustomLogger dependency and true network topology."""
+        """Initializes the engine with the actual CustomLogger and true network topology."""
         self.logger = CustomLogger(name="TestXAI_DL")
         self.logger.add_console_handler(level="INFO")
         self.device = torch.device("cpu")
@@ -27,7 +53,8 @@ class TestDLExplainableAI(unittest.TestCase):
         self.xai_engine = DLExplainableAI(logger=self.logger, device=self.device)
         
         # Instantiate the real CNN Engine in Dummy Mode to extract the actual architecture
-        self.dl_engine = CNNPredictiveEngine(logger=self.logger, device=self.device, is_dummy=True)
+        # Usiamo l'alias ModelEngine gestito nel blocco di importazione
+        self.dl_engine = ModelEngine(logger=self.logger, device=self.device, is_dummy=True)
         self.model = self.dl_engine._prepare_model_for_parallelism()
 
     def test_integrated_gradients_math(self):
@@ -43,8 +70,6 @@ class TestDLExplainableAI(unittest.TestCase):
             
             # The returned map has the batch dimension squeezed out (Channel, Depth, Height, Width)
             self.assertEqual(ig_map.shape, (1, 32, 32, 32))
-            
-            # Ensures Autograd successfully tracked through all EfficientNet blocks without NaN decay
             self.assertFalse(np.isnan(ig_map).any())
 
     def test_aggregate_global_maps(self):
