@@ -10,7 +10,7 @@ import os
 import pathlib
 import io
 import tempfile
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch
 
 # Dynamically resolve paths using pathlib
 current_dir= pathlib.Path(__file__).resolve().parent
@@ -20,7 +20,7 @@ parent_dir= current_dir.parent
 sys.path.insert(0, str(parent_dir))
 
 # Import the target module
-import py_logger 
+from Python.utils.py_logger import CustomLogger
 
 class TestCustomLogger(unittest.TestCase):
     """
@@ -29,7 +29,7 @@ class TestCustomLogger(unittest.TestCase):
     """
     def test_initialization_and_context(self):
         """Verify that basic object states and context mapping behave as expected."""
-        log = py_logger.CustomLogger(name="test_runner")
+        log = CustomLogger(name="test_runner")
         
         self.assertEqual(log.name, "test_runner")
         
@@ -47,7 +47,7 @@ class TestCustomLogger(unittest.TestCase):
     @patch("sys.stdout", new_callable=io.StringIO)
     def test_console_handler_and_levels(self, mock_stdout: io.StringIO):
         """Verify that global filters apply correctly to the console handler."""
-        log = py_logger.CustomLogger()
+        log = CustomLogger()
         log.add_console_handler(level="INFO", use_colors=False)
         
         # Should be ignored (filtered out by the level)
@@ -72,7 +72,7 @@ class TestCustomLogger(unittest.TestCase):
     @patch("sys.stdout", new_callable=io.StringIO)
     def test_context_injection(self, mock_stdout: io.StringIO):
         """Verify that the context is appended to logs."""
-        log = py_logger.CustomLogger()
+        log = CustomLogger()
         log.add_console_handler(level="DEBUG")
         
         log.add_context("Module", "VBM")
@@ -90,7 +90,7 @@ class TestCustomLogger(unittest.TestCase):
         Verify that the context manager temporarily injects and properly 
         cleans up metadata in a with block.
         """
-        log = py_logger.CustomLogger()
+        log = CustomLogger()
         log.add_console_handler(level="DEBUG")
         
         log.add_context("Global", "Active")
@@ -116,14 +116,14 @@ class TestCustomLogger(unittest.TestCase):
         self.assertNotIn("Task", outside_log)
         self.assertIn("Outside block", outside_log)
 
-    # Mock logger.add to prevent file creation and capture parameters
-    @patch("py_logger.logger.add")
+    # Mock loguru.logger.add to prevent file creation and capture parameters
+    @patch("loguru.logger.add")
     def test_rotation_parameter_translation(self, mock_logger_add):
         """
         Verify that numeric rotation parameters are mathematically translated to bytes, 
         while semantic strings are preserved.
         """
-        log = py_logger.CustomLogger()
+        log = CustomLogger()
         
         # Test numeric (int/float) bytes translation
         log.add_file_handler("numeric.log", rotation=1024)
@@ -141,7 +141,7 @@ class TestCustomLogger(unittest.TestCase):
         Verify the log() method and its exception handling 
         for intentionally malformed format strings.
         """
-        log = py_logger.CustomLogger()
+        log = CustomLogger()
         log.add_console_handler(level="TRACE")
         
         # Correct formatting
@@ -167,7 +167,7 @@ class TestCustomLogger(unittest.TestCase):
             
             # Instantiate and immediately destroy
             def create_abandoned_file():
-                log = py_logger.CustomLogger()
+                log = CustomLogger()
                 log.add_file_handler(str(log_file), level="INFO")
                 # Intentionally writing NO logs. File created but remains at 0 bytes.
                 log.shutdown() # Force immediate teardown
@@ -188,7 +188,7 @@ class TestCustomLogger(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temp_dir:
             log_file = pathlib.Path(temp_dir) / "integration_test.log"
 
-            log = py_logger.CustomLogger()
+            log = CustomLogger()
             log.add_file_handler(str(log_file), level="INFO")
             log.add_context("Deployment", "TestEnv")
             
