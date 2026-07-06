@@ -84,7 +84,7 @@ classdef VBMAnalysis < handle
             matlabbatch{1}.spm.stats.factorial_design.cov(3).iCFI = 1;
             matlabbatch{1}.spm.stats.factorial_design.cov(3).iCC = 1;
 
-            % Masking using explicit mask (from BainMask object)
+            % Masking using explicit mask (from BainMask object) (zero-var voxels will be excluded anyway)
             matlabbatch{1}.spm.stats.factorial_design.masking.tm.tm_none = 1;           % No absolute thresholding
             matlabbatch{1}.spm.stats.factorial_design.masking.im = 0;                   % Implicit masking off
             matlabbatch{1}.spm.stats.factorial_design.masking.em = maskPathCell(:);     % Explicit mask 3D volume
