@@ -74,3 +74,19 @@ Clone this repository and run the main orchestrator using default parameters[cit
 ```bash
 cd CMEPDA_project_2024
 python main.py
+```
+
+# References
+
+The original dataset comes from the Alzheimer Dataset used in the following paper:
+- **Retico, A., Bosco, P., Cerello, P., Fiorina, E., Chincarini, A., & Fantacci, M. E.** (2014). Predictive Models Based on Support Vector Machines: Whole-Brain versus Regional Analysis of Structural MRI in the Alzheimer's Disease. Journal of Neuroimaging, 25(4), 552–563. [DOI](10.1111/jon.12163).
+
+The Machine Learning Models and the Explainable-AI approaches comes from the following articles:
+
+- **Haufe, S., Meinecke, F., Görgen, K., Dähne, S., Haynes, J.-D., Blankertz, B., & Bießmann, F.** (2014). On the interpretation of weight vectors of linear models in multivariate neuroimaging. NeuroImage, 87, 96–110. [DOI](http://dx.doi.org/10.1016/j.neuroimage.2013.10.067)
+
+- **Gaonkar, B., & Davatzikos, C.** (2013). Analytic estimation of statistical significance maps for support vector machine based multi-variate image analysis and classification. NeuroImage, 78, 270-283. [DOI](10.1016/j.media.2015.06.008.)
+
+- **Bloch, L., & Friedrich, C. M.** (2024). Systematic comparison of 3D Deep learning and classical machine learning explanations for Alzheimer's Disease detection. Scientific Reports, 14. [DOI](https://doi.org/10.1016/j.compbiomed.2024.108029)
+
+- **Di Wang, et al.** (2023). DL network heatmaps capture AD patterns reported in a large meta-analysis of neuroimaging studies. NeuroImage. [DOI](https://doi.org/10.1016/j.neuroimage.2023.119929.)
