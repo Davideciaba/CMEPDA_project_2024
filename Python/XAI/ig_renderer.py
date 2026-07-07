@@ -2,7 +2,8 @@
 Module: ig_renderer.py
 
 Provides 3D tensor visualization primitives to render Deep Learning Integrated Gradients (IG).
-Uses a diverging colormap ('coolwarm') to show both positive and negative attributions.
+Uses a diverging colormap ('coolwarm') bounded by an empirical alpha-level threshold,
+ensuring visual sparsity matching statistical analytical models.
 """
 import os
 import math
@@ -24,10 +25,7 @@ class IGRenderer:
 
     def _get_voxel_indices_from_mni(self, affine_mat: np.ndarray, tensor_size: Tuple[int, int, int], 
                                     active_mask: np.ndarray, step_mm: float = 5.0) -> Tuple[List[int], List[float]]:
-        """
-        Converts active bounding box to MNI millimeters, steps through it, 
-        and maps back to physical voxel Z-indices.
-        """
+        """Converts active bounding box to MNI millimeters and physical voxel Z-indices."""
         max_z = tensor_size[2]
         vox_center_xy = (tensor_size[0] // 2, tensor_size[1] // 2)
         
@@ -70,12 +68,13 @@ class IGRenderer:
         return z_slices_voxel, z_mm_array
 
     def plot_ig_map(self, map_path: str, bg_path: str, out_fig_path: str, 
-                    threshold: float = 0.0, step_mm: float = 3.0, 
+                    alpha_level: float = 0.05, step_mm: float = 3.0, 
                     map_title: str = "EfficientNet IG Map") -> None:
         """
         Renders thresholded Integrated Gradients over a raw 3D volume.
+        Isolates the most extreme absolute attributions via empirical alpha percentile.
         """
-        self.logger.info("Initiating IG Diverging Overlay Rendering...")
+        self.logger.info(f"Initiating IG Diverging Overlay Rendering (Empirical Alpha = {alpha_level})...")
         
         bg_img = nib.load(bg_path)
         bg_vol = bg_img.get_fdata()
@@ -87,9 +86,20 @@ class IGRenderer:
             raise ValueError("Dimension mismatch between background and IG map.")
             
         abs_ig = np.abs(ig_vol)
+        
+        # Calcolo Soglia Adattiva divergente (Percentile Empirico del valore assoluto)
+        brain_mask = bg_vol > 0
+        brain_values_abs = abs_ig[brain_mask]
+        
+        if len(brain_values_abs) == 0:
+            self.logger.warning("Empty background volume detected. Plotting aborted.")
+            return
+
+        percentile_rank = 100.0 * (1.0 - alpha_level)
+        threshold = np.percentile(brain_values_abs, percentile_rank)
+        
         max_abs = np.max(abs_ig)
         if max_abs <= threshold:
-            self.logger.warning("No voxels survive the applied IG threshold.")
             max_abs = threshold + 1e-5
             
         active_mask = abs_ig >= threshold
@@ -134,7 +144,7 @@ class IGRenderer:
         for idx in range(num_slices + 1, len(axes)):
             axes[idx].axis('off')
             
-        fig.text(0.5, 0.02, f" {map_title} | Abs Threshold \u2265 {threshold:.2f}", 
+        fig.text(0.5, 0.02, f" {map_title} | Top {alpha_level*100:.1f}% Abs Attributions (|IG| \u2265 {threshold:.2f})", 
                  ha='center', color='white', fontsize=12, fontweight='bold', 
                  bbox=dict(facecolor='#333333', edgecolor='none', boxstyle='round,pad=0.5'))
                  

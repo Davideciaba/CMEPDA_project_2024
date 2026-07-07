@@ -2,7 +2,8 @@
 Module: svm_renderer.py
 
 Provides 3D tensor visualization primitives to render SVM XAI output maps.
-Uses a 'hot' sequential colormap bounded by statistical thresholds.
+Uses a 'hot' sequential colormap bounded by an empirical alpha-level threshold,
+ensuring visual and mathematical consistency with Gaonkar's p-value logic.
 """
 import os
 import math
@@ -24,10 +25,7 @@ class SVMRenderer:
 
     def _get_voxel_indices_from_mni(self, affine_mat: np.ndarray, tensor_size: Tuple[int, int, int], 
                                     active_mask: np.ndarray, step_mm: float = 5.0) -> Tuple[List[int], List[float]]:
-        """
-        Converts active bounding box to MNI millimeters, steps through it, 
-        and maps back to physical voxel Z-indices.
-        """
+        """Converts active bounding box to MNI millimeters and physical voxel Z-indices."""
         max_z = tensor_size[2]
         vox_center_xy = (tensor_size[0] // 2, tensor_size[1] // 2)
         
@@ -70,12 +68,14 @@ class SVMRenderer:
         return z_slices_voxel, z_mm_array
 
     def plot_svm_map(self, map_path: str, bg_path: str, out_fig_path: str, 
-                     threshold: float = 0.0, step_mm: float = 3.0, 
+                     alpha_level: float = 0.05, step_mm: float = 3.0, 
                      map_title: str = "SVM Activation Map") -> None:
         """
-        Renders thresholded statistical SVM maps over a raw 3D volume.
+        Renders statistical SVM maps over a raw 3D volume.
+        Thresholds the map dynamically to isolate the top 'alpha_level' percentage
+        of voxels, maintaining consistency with Gaonkar's uncorrected p-value maps.
         """
-        self.logger.info("Initiating SVM Statistical Overlay Rendering...")
+        self.logger.info(f"Initiating SVM Overlay Rendering (Empirical Alpha = {alpha_level})...")
         
         bg_img = nib.load(bg_path)
         bg_vol = bg_img.get_fdata()
@@ -86,9 +86,20 @@ class SVMRenderer:
         if bg_vol.shape != svm_vol.shape:
             raise ValueError("Dimension mismatch between background and SVM map.")
             
+        # Calcolo Soglia Adattiva (Percentile Empirico) basato sull'alpha level
+        # Si applica solo ai voxel all'interno del cervello (dove bg_vol > 0)
+        brain_mask = bg_vol > 0
+        brain_values = svm_vol[brain_mask]
+        
+        if len(brain_values) == 0:
+            self.logger.warning("Empty background volume detected. Plotting aborted.")
+            return
+
+        percentile_rank = 100.0 * (1.0 - alpha_level)
+        threshold = np.percentile(brain_values, percentile_rank)
+        
         max_val = np.max(svm_vol)
         if max_val <= threshold:
-            self.logger.warning("No voxels survive the applied threshold.")
             max_val = threshold + 1e-5
             
         active_mask = svm_vol >= threshold
@@ -133,7 +144,7 @@ class SVMRenderer:
         for idx in range(num_slices + 1, len(axes)):
             axes[idx].axis('off')
             
-        fig.text(0.5, 0.02, f" {map_title} | Threshold \u2265 {threshold:.2f}", 
+        fig.text(0.5, 0.02, f" {map_title} | Top {alpha_level*100:.1f}% Active Voxels (\u2265 {threshold:.2f})", 
                  ha='center', color='white', fontsize=12, fontweight='bold', 
                  bbox=dict(facecolor='#333333', edgecolor='none', boxstyle='round,pad=0.5'))
                  
