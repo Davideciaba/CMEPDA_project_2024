@@ -5,6 +5,9 @@ This module implements the analytical Explainable AI (XAI) algorithms for Linear
 It contains the SVMAnalyticalXAI class, which provides high-efficiency implementations
 of Haufe's Forward Transform and Gaonkar's Analytic Significance Mapping (p-maps),
 strictly optimized to avoid RAM out-of-memory errors on massive 3D neuroimaging tensors.
+
+Designed for a structured package layout. Strictly decoupled from specific model classes,
+accepting any valid ML model spawned by the SVMPredictiveEngine.
 """
 import os
 import numpy as np
@@ -12,6 +15,7 @@ import nibabel as nib
 from typing import Tuple, Any, List
 from scipy.stats import norm
 
+# --- STRICT TYPE HINTING ---
 from utils.py_logger import CustomLogger
 
 
@@ -24,6 +28,9 @@ class SVMAnalyticalXAI:
         """
         Initializes the SVM XAI engine via Dependency Injection.
         Strict typing enforces the use of the project's native CustomLogger.
+        
+        Args:
+            logger (CustomLogger): The unified project logger.
         """
         self.logger = logger
 
@@ -88,8 +95,21 @@ class SVMAnalyticalXAI:
         m, d = X_train.shape
         W = model.coef_[0]
 
-        # K_matrix = XX^T
+        # --- QA: Gaonkar Assumptions Check ---
+        # Verifiche di integrità del regime HDLSS in fase di run-time sui dati clinici
+        ratio_md = m / d
+        if ratio_md >= 0.2:
+            self.logger.warning(f"Gaonkar Check Failed: Sample-to-Feature ratio (m/d) = {ratio_md:.3f} is >= 0.2.")
+            
+        if hasattr(model, 'support_'):
+            sv_ratio = len(model.support_) / m
+            if sv_ratio <= 0.95:
+                self.logger.warning(f"Gaonkar Check Failed: Support Vectors percentage is {sv_ratio*100:.1f}% (Expected > 95%).")
+
         K_matrix = X_train @ X_train.T
+        cond_K = np.linalg.cond(K_matrix)
+        if cond_K >= 1e4:
+            self.logger.warning(f"Gaonkar Check Failed: Gram matrix condition number is {cond_K:.2e} (Expected < 10^4).")
         
         # J \in R^m a vector with each component equal to 1
         J = np.ones((m, 1))

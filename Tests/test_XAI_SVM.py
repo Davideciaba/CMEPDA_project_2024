@@ -8,19 +8,19 @@ import sys
 import os
 
 # --- PATH INJECTION ---
-# Risaliamo di un livello da "Tests" alla root e aggiungiamo "Python"
 current_dir = os.path.dirname(os.path.abspath(__file__))
 parent_dir = os.path.abspath(os.path.join(current_dir, '..'))
 python_src_dir = os.path.join(parent_dir, 'Python')
 
-if python_src_dir not in sys.path:
+if os.path.exists(python_src_dir) and python_src_dir not in sys.path:
     sys.path.insert(0, python_src_dir)
+elif parent_dir not in sys.path:
+    sys.path.insert(0, parent_dir)
 
 import unittest
 from unittest.mock import patch, MagicMock
 import numpy as np
 
-# Importiamo dal nuovo namespace 
 from XAI.XAI_SVM import SVMAnalyticalXAI
 from utils.py_logger import CustomLogger
 
@@ -50,9 +50,9 @@ class TestSVMAnalyticalXAI(unittest.TestCase):
         self.assertFalse(np.isnan(haufe_map).any())
 
     def test_compute_gaonkar_maps_math(self):
-        """Validates Gaonkar's non-parametric projection and FWE-correction bounding."""
+        """Validates Gaonkar's non-parametric projection bounding and execution."""
         with self.logger.context(Task="Gaonkar_Math"):
-            N_SAMPLES, N_FEATURES = 8, 500
+            N_SAMPLES, N_FEATURES = 8, 500 
             np.random.seed(42)
             
             X_train = np.random.randn(N_SAMPLES, N_FEATURES)
@@ -60,8 +60,8 @@ class TestSVMAnalyticalXAI(unittest.TestCase):
             
             mock_model = MagicMock()
             mock_model.coef_ = np.array([np.random.randn(N_FEATURES)])
+            mock_model.support_ = np.arange(N_SAMPLES)
 
-            # Esecuzione del metodo che ora ritorna 3 tensori
             z_map, p_map_raw, p_map_fwe = self.xai_engine.compute_gaonkar_maps(mock_model, X_train, y_train, C=1.0)
 
             self.assertEqual(z_map.shape, (N_FEATURES,))
@@ -69,8 +69,8 @@ class TestSVMAnalyticalXAI(unittest.TestCase):
             self.assertEqual(p_map_fwe.shape, (N_FEATURES,))
             
             # Valida la natura matematica della correzione FWE
-            self.assertTrue(np.all(p_map_fwe >= p_map_raw))  # I p-value corretti devono essere più alti o uguali
-            self.assertTrue(np.all(p_map_fwe <= 1.0))        # I prob non devono mai superare 1.0
+            self.assertTrue(np.all(p_map_fwe >= p_map_raw)) 
+            self.assertTrue(np.all(p_map_fwe <= 1.0))
 
     def test_aggregate_global_maps(self):
         """Ensures cross-fold element-wise aggregation yields an exact mean."""
