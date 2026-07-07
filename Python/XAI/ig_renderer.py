@@ -2,8 +2,7 @@
 Module: ig_renderer.py
 
 Provides 3D tensor visualization primitives to render Deep Learning Integrated Gradients (IG).
-Uses a diverging colormap ('coolwarm') bounded by an empirical alpha-level threshold,
-ensuring visual sparsity matching statistical analytical models.
+Uses a diverging colormap ('coolwarm') bounded by a user-defined absolute threshold.
 """
 import os
 import math
@@ -68,13 +67,13 @@ class IGRenderer:
         return z_slices_voxel, z_mm_array
 
     def plot_ig_map(self, map_path: str, bg_path: str, out_fig_path: str, 
-                    alpha_level: float = 0.05, step_mm: float = 3.0, 
+                    threshold: float = 0.0, step_mm: float = 3.0, 
                     map_title: str = "EfficientNet IG Map") -> None:
         """
         Renders thresholded Integrated Gradients over a raw 3D volume.
-        Isolates the most extreme absolute attributions via empirical alpha percentile.
+        Isolates attributions strictly based on the absolute raw threshold.
         """
-        self.logger.info(f"Initiating IG Diverging Overlay Rendering (Empirical Alpha = {alpha_level})...")
+        self.logger.info(f"Initiating IG Diverging Overlay Rendering (Threshold = {threshold})...")
         
         bg_img = nib.load(bg_path)
         bg_vol = bg_img.get_fdata()
@@ -86,22 +85,13 @@ class IGRenderer:
             raise ValueError("Dimension mismatch between background and IG map.")
             
         abs_ig = np.abs(ig_vol)
-        
-        # Calcolo Soglia Adattiva divergente (Percentile Empirico del valore assoluto)
-        brain_mask = bg_vol > 0
-        brain_values_abs = abs_ig[brain_mask]
-        
-        if len(brain_values_abs) == 0:
-            self.logger.warning("Empty background volume detected. Plotting aborted.")
-            return
-
-        percentile_rank = 100.0 * (1.0 - alpha_level)
-        threshold = np.percentile(brain_values_abs, percentile_rank)
-        
         max_abs = np.max(abs_ig)
+        
         if max_abs <= threshold:
+            self.logger.warning(f"No voxels survive the applied threshold ({threshold}).")
             max_abs = threshold + 1e-5
             
+        # Absolute threshold filtering applied to both negative and positive poles
         active_mask = abs_ig >= threshold
         z_voxels, z_mms = self._get_voxel_indices_from_mni(affine_mat, bg_vol.shape, active_mask, step_mm)
         num_slices = len(z_voxels)
@@ -144,7 +134,7 @@ class IGRenderer:
         for idx in range(num_slices + 1, len(axes)):
             axes[idx].axis('off')
             
-        fig.text(0.5, 0.02, f" {map_title} | Top {alpha_level*100:.1f}% Abs Attributions (|IG| \u2265 {threshold:.2f})", 
+        fig.text(0.5, 0.02, f" {map_title} | Abs Threshold \u2265 {threshold:.2f}", 
                  ha='center', color='white', fontsize=12, fontweight='bold', 
                  bbox=dict(facecolor='#333333', edgecolor='none', boxstyle='round,pad=0.5'))
                  
