@@ -79,7 +79,7 @@ python main.py
 # References
 
 The original dataset comes from the Alzheimer Dataset used in the following paper:
-- **Retico, A., Bosco, P., Cerello, P., Fiorina, E., Chincarini, A., & Fantacci, M. E.** (2014). Predictive Models Based on Support Vector Machines: Whole-Brain versus Regional Analysis of Structural MRI in the Alzheimer's Disease. Journal of Neuroimaging, 25(4), 552–563. [DOI](10.1111/jon.12163).
+- **Retico, A., Bosco, P., Cerello, P., Fiorina, E., Chincarini, A., & Fantacci, M. E.** (2014). Predictive Models Based on Support Vector Machines: Whole-Brain versus Regional Analysis of Structural MRI in the Alzheimer's Disease. Journal of Neuroimaging, 25(4), 552–563. [DOI](https://doi.org/10.1111/jon.12163).
 
 The Machine Learning Models and the Explainable-AI approaches comes from the following articles:
 
