@@ -68,14 +68,14 @@ To quantitatively evaluate whether the Machine Learning representations (SVM and
 </div>
 
 # Usage
-We warmly invite the user to run the code on a GPU, because of its computational cost[cite: 30]. 
+We warmly invite the user to run the code on a GPU, because of its computational cost. 
 
-Clone this repository and run the main orchestrator using default parameters[cite: 30]:
+Clone this repository and run the main orchestrator using default parameters:
 ```bash
 cd CMEPDA_project_2024
 python main.py
 ```
-
+For the preprocessing part you need **Matlab** and the **Python** module **matlab.engine** installed. They are not included in the project's requirements but for **Matlab** you need the specific version 25.2
 # References
 
 The original dataset comes from the Alzheimer Dataset used in the following paper:
