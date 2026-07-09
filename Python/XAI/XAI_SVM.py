@@ -1,198 +1,202 @@
 """
 Module: XAI_SVM.py
 
-This module implements the analytical Explainable AI (XAI) algorithms for Linear SVMs.
-It contains the SVMAnalyticalXAI class, which provides high-efficiency implementations
-of Haufe's Forward Transform and Gaonkar's Analytic Significance Mapping (p-maps),
-strictly optimized to avoid RAM out-of-memory errors on massive 3D neuroimaging tensors.
-
-Designed for a structured package layout. Strictly decoupled from specific model classes,
-accepting any valid ML model spawned by the SVMPredictiveEngine.
+Encapsulates Explainable AI (XAI) algorithms for Linear Support Vector Machines 
+in neuroimaging contexts. Implements both the Haufe Forward Transform and the 
+Gaonkar Analytic Significance Maps for HDLSS (High-Dimension Low-Sample-Size) data,
+including native Family-Wise Error (FWE) corrections.
 """
 import os
 import numpy as np
+import scipy.stats as stats
 import nibabel as nib
-from typing import Tuple, Any, List
-from scipy.stats import norm
+from statsmodels.stats.multitest import multipletests
+from typing import Tuple, Optional
 
-# --- STRICT TYPE HINTING ---
 from utils.py_logger import CustomLogger
 
-
-class SVMAnalyticalXAI:
+class SVMExplainer:
     """
-    Analytical Explainable AI Engine for Linear Support Vector Machines.
+    Computes biologically interpretable spatial patterns from backward SVM models.
     """
 
     def __init__(self, logger: CustomLogger):
-        """
-        Initializes the SVM XAI engine via Dependency Injection.
-        Strict typing enforces the use of the project's native CustomLogger.
-        
-        Args:
-            logger (CustomLogger): The unified project logger.
-        """
+        """Initializes the SVMExplainer with a custom logger."""
         self.logger = logger
 
-    def compute_haufe_transform(self, model: Any, X_train: np.ndarray) -> np.ndarray:
+    def compute_haufe_patterns(self, X_train: np.ndarray, decision_scores: np.ndarray) -> np.ndarray:
         """
-        Computes Haufe's forward activation pattern from backward SVM weights.
+        Computes the Haufe Forward Transform: A = Cov(X, s).
+        Transforms backward SVM weights (noise suppressors) into true biological activation patterns.
         
-        MATHEMATICAL PIPELINE MAPPING:
-            Since standard SVM weights (W) represent a backward model, we compute 
-            Activation Patterns A:
-            1. SVM decision function: s_hat = X_train * W + b
-            2. s_hat_centr = s_hat - mean(s_hat)
-            3. X_centr = X_train - mean(X_train)
-            4. A = Cov(X_train, s_hat) = 1/(N-1) * sum(X_centr^T * s_hat_centr)
-        """
-        self.logger.info("Computing Haufe Forward Transform...")
-        
-        N, V = X_train.shape
-        if N <= 1:
-            raise ValueError("Haufe transform requires a training set size N > 1 to compute covariance.")
-
-        W = model.coef_[0]
-        # Estrazione del bias per la decision function (se presente)
-        b = model.intercept_[0] if hasattr(model, 'intercept_') and model.intercept_ is not None else 0.0
-
-        # Step 1: SVM decision function: \hat{s} = X_train W + b
-        s_hat = X_train @ W + b
-        
-        # Step 2: Centering \hat{s}_{centr, n} = \hat{s}_n - \overline{s}_n
-        s_hat_centr = s_hat - np.mean(s_hat)
-
-        # Step 3: Centering X_{centr, n} = X_{train, n} - \overline{X_{train}}
-        X_mean = np.mean(X_train, axis=0)
-        X_centr = X_train - X_mean
-
-        # Step 4: A = Cov(X, \hat{s}) = 1/(N_train - 1) * X_centr^T \hat{s}_centr
-        A = (1.0 / (N - 1)) * (X_centr.T @ s_hat_centr)
-
-        self.logger.debug("Haufe forward activation map generated successfully.")
-        return A
-
-    def compute_gaonkar_maps(self, model: Any, X_train: np.ndarray, y_train: np.ndarray, C: float) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
-        """
-        Analytically estimates voxel-wise Z-score and p-value maps under the null hypothesis.
-        
-        MATHEMATICAL PIPELINE MAPPING (Gaonkar):
-            - J \in R^m : a vector with each component equal to 1.
-            - K = (XX^T)^{-1}
-            - C = X^T [ K + K*J(-J^T K J)^{-1}J^T*K ]
-            - \sigma_j^2 = (4p - 4p^2) \sum_i C_{i,j}^2
-            - E(w^T w) = \sum_k \sigma_k^2
-            - s_j^* = w_j^* / (w^{*T} w^*)
-            - var(s_j) = \sigma_j^2 / E(w^T w)^2
-            - z_j = s_j^* / \sqrt{var(s_j)}
-            - p_values[j] = 2 * scipy.stats.norm.sf(np.abs(z_j)) + FWE-correction
+        Args:
+            X_train: Feature matrix of shape (m_samples, d_features).
+            decision_scores: SVM decision function outputs (m_samples,).
             
         Returns:
-            Tuple[np.ndarray, np.ndarray, np.ndarray]: (z_map, p_map_raw, p_map_fwe)
+            np.ndarray: Haufe activation pattern of shape (d_features,).
         """
-        self.logger.info("Executing Gaonkar analytic significance mapping...")
+        self.logger.info("Computing Haufe Forward Transform (Covariance mapping)...")
         
-        m, d = X_train.shape
-        W = model.coef_[0]
-
-        # --- QA: Gaonkar Assumptions Check ---
-        # Verifiche di integrità del regime HDLSS in fase di run-time sui dati clinici
-        ratio_md = m / d
-        if ratio_md >= 0.2:
-            self.logger.warning(f"Gaonkar Check Failed: Sample-to-Feature ratio (m/d) = {ratio_md:.3f} is >= 0.2.")
+        # Center the data and the scores
+        X_centr = X_train - np.mean(X_train, axis=0)
+        s_centr = decision_scores - np.mean(decision_scores)
+        
+        m_samples = X_train.shape[0]
+        if m_samples <= 1:
+            self.logger.error("Insufficient samples to compute covariance.")
+            raise ValueError("m_samples must be > 1 for Haufe transform.")
             
-        if hasattr(model, 'support_'):
-            sv_ratio = len(model.support_) / m
-            if sv_ratio <= 0.95:
-                self.logger.warning(f"Gaonkar Check Failed: Support Vectors percentage is {sv_ratio*100:.1f}% (Expected > 95%).")
+        # A = (X_centr^T @ s_centr) / (m - 1)
+        haufe_map = (X_centr.T @ s_centr) / (m_samples - 1)
+        
+        self.logger.success("Haufe patterns successfully extracted.")
+        return haufe_map
 
-        K_matrix = X_train @ X_train.T
-        cond_K = np.linalg.cond(K_matrix)
-        if cond_K >= 1e4:
-            self.logger.warning(f"Gaonkar Check Failed: Gram matrix condition number is {cond_K:.2e} (Expected < 10^4).")
+    def compute_gaonkar_maps(self, X_train: np.ndarray, y_train: np.ndarray, 
+                             svm_weights: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
+        """
+        Computes the Analytic Statistical Significance Maps for SVM according to 
+        Gaonkar & Davatzikos (2013). Avoids computationally expensive permutation tests.
         
-        # J \in R^m a vector with each component equal to 1
-        J = np.ones((m, 1))
+        Args:
+            X_train: Training feature matrix (m_samples, d_features).
+            y_train: Binary labels in {-1, 1} or {0, 1} format (m_samples,).
+            svm_weights: The optimized weight vector w* from the linear SVM (d_features,).
+            
+        Returns:
+            Tuple[np.ndarray, np.ndarray]: Continuous Z-scores map and raw p-values map.
+        """
+        self.logger.info("Computing Gaonkar Analytic Significance Maps for HDLSS regime...")
         
-        # K = (XX^T)^{-1}. Usiamo la Pseudo-Inversa per garantire stabilità numerica nei regimi HDLSS
-        K_inv = np.linalg.pinv(K_matrix)
+        m_samples, d_features = X_train.shape
         
-        # Calcolo dei sub-termini per ottimizzare le operazioni matriciali
-        # K_inv_J = (XX^T)^{-1} J
-        K_inv_J = K_inv @ J
+        # Check dimensional constraints
+        ratio = m_samples / d_features
+        self.logger.debug(f"Gaonkar Sample-to-Feature Ratio (m/d): {ratio:.4f}")
+        if ratio > 0.2:
+            self.logger.warning(f"m/d ratio ({ratio:.4f}) exceeds 0.2. Gaonkar assumption might be unstable.")
+            
+        # Ensure labels are binary and determine fraction 'p' of positive class
+        unique_labels = np.unique(y_train)
+        pos_class = unique_labels[1] if len(unique_labels) > 1 else 1
+        p_frac = np.sum(y_train == pos_class) / m_samples
         
-        # J_K_inv_J = J^T (XX^T)^{-1} J
-        J_K_inv_J = J.T @ K_inv_J
+        # 1. Compute Gram Matrix (K = X @ X^T)
+        K = X_train @ X_train.T
+        cond_num = np.linalg.cond(K)
         
-        # Inversa dello scalare (-J^T (XX^T)^{-1} J)^{-1}
-        scalar_inv = 1.0 / (-J_K_inv_J[0, 0])
+        self.logger.debug(f"Gram Matrix Condition Number: {cond_num:.2e}")
         
-        # Costruzione della matrice interna H (m x m)
-        # H = (XX^T)^{-1} + (XX^T)^{-1} J ( -J^T (XX^T)^{-1} J )^{-1} J^T (XX^T)^{-1}
-        H = K_inv + scalar_inv * (K_inv_J @ K_inv_J.T)
+        # Safe Inversion (Pseudo-inverse if highly ill-conditioned)
+        if cond_num > 1e4:
+            self.logger.warning("Gram Matrix is ill-conditioned (cond > 10^4). Using Moore-Penrose Pseudo-Inverse.")
+            K_inv = np.linalg.pinv(K)
+        else:
+            K_inv = np.linalg.inv(K)
+            
+        # 2. Compute Intermediate Matrix C
+        J = np.ones((m_samples, 1))
+        J_T_K_inv_J = float(J.T @ K_inv @ J)
         
-        # C = X^T H. Size: (d, m) -> C_{j, i} rappresenta la feature j e il sample i
-        C_matrix = X_train.T @ H
+        if J_T_K_inv_J == 0:
+            raise ValueError("Math Error: J^T * K^-1 * J is zero. Cannot invert.")
+            
+        # term2 = K^-1 * J * (-J^T * K^-1 * J)^-1 * J^T * K^-1
+        scalar_inv = 1.0 / (-J_T_K_inv_J)
+        term2 = (K_inv @ J) * scalar_inv @ (J.T @ K_inv)
         
-        # Calcolo del parametro p (frazione dei campioni etichettata come +1)
-        y_train_arr = np.array(y_train)
-        classes = np.unique(y_train_arr)
-        pos_class = classes[1] if len(classes) > 1 else 1
-        p = np.sum(y_train_arr == pos_class) / m
+        P = K_inv + term2  # Shape: (m_samples, m_samples)
         
-        # \sigma_j^2 = (4p - 4p^2) \sum_i C_{i,j}^2 
-        # (np.sum lungo l'asse 1 somma i quadrati sui campioni per ogni voxel j)
-        sum_C2 = np.sum(C_matrix**2, axis=1)
-        sigma2 = (4 * p - 4 * (p**2)) * sum_C2
+        # C = X^T @ P. Shape of C: (d_features, m_samples)
+        C = X_train.T @ P
         
-        # E(w^T w) = \sum_k \sigma_k^2
-        E_ww = np.sum(sigma2)
+        # 3. Compute Variances
+        # Sum of squared elements of C over the samples (axis=1)
+        sum_C2 = np.sum(C**2, axis=1)
+        sigma2 = (4 * p_frac - 4 * p_frac**2) * sum_C2  # Shape: (d_features,)
         
-        # s_j^* = w_j^* / (w^{*T} w^*)
-        w_norm2 = np.dot(W, W)
-        s_star = W / w_norm2
+        E_wTw = float(np.sum(sigma2))
         
-        # var(s_j) = \sigma_j^2 / E(w^T w)^2
-        var_s = sigma2 / (E_ww**2)
-        var_s = np.where(var_s <= 0, 1e-16, var_s)  # Prevenzione divisione per zero
+        if E_wTw <= 0:
+            self.logger.error("Expected E(w^Tw) is zero or negative. Math instability detected.")
+            raise ValueError("E(w^Tw) computation failed.")
+            
+        # 4. Compute Analytic Z-Scores
+        wTw = float(svm_weights.T @ svm_weights)
+        s_star = svm_weights / (wTw + 1e-15)
         
-        # z_j = s_j^* / \sqrt{var(s_j)}
-        z_map = s_star / np.sqrt(var_s)
+        var_s = sigma2 / (E_wTw**2)
         
-        # p_values[j] = 2 * scipy.stats.norm.sf(np.abs(z_j))
-        p_map_raw = 2 * norm.sf(np.abs(z_map))
+        # z_j = s_j* / sqrt(var(s_j))
+        z_scores = s_star / np.sqrt(var_s + 1e-15)
         
-        # FWE-correction (Metodo Bonferroni: moltiplicazione per il numero di feature 'd')
-        p_map_fwe = np.minimum(p_map_raw * d, 1.0)
+        # 5. Compute two-tailed p-values from standard normal distribution
+        p_values = 2 * stats.norm.sf(np.abs(z_scores))
+        
+        self.logger.success("Gaonkar Z-maps and p-values successfully evaluated.")
+        return z_scores, p_values
 
-        self.logger.debug("Gaonkar mappings generated successfully.")
-        return z_map, p_map_raw, p_map_fwe
-
-    @staticmethod
-    def aggregate_global_maps(maps_list: List[np.ndarray]) -> np.ndarray:
-        """Performs element-wise arithmetic averaging over multiple out-of-fold XAI arrays."""
-        if not maps_list:
-            raise ValueError("The list of maps to aggregate cannot be empty.")
-        return np.mean(np.array(maps_list), axis=0)
-
-    def reconstruct_nifti(self, map_1d: np.ndarray, mask_path: str, output_path: str) -> None:
-        """Maps a 1D masked feature array back into a 3D NIfTI grid using a spatial template."""
-        self.logger.info(f"Reconstructing 1D map into 3D volume using mask template: {mask_path}")
+    def apply_gaonkar_fwe_correction(self, z_scores: np.ndarray, p_values: np.ndarray, 
+                                     alpha: float = 0.05) -> np.ndarray:
+        """
+        Applies Family-Wise Error (FWE) correction using the Bonferroni method.
+        Forces non-significant voxels mathematically to zero.
         
-        if not os.path.exists(mask_path):
-            raise FileNotFoundError(f"Template mask not found at path: {mask_path}")
-
-        mask_img = nib.load(mask_path)
-        mask_data = mask_img.get_fdata()
-        mask_bool = mask_data > 0
-
-        if len(map_1d) != np.sum(mask_bool):
-            raise ValueError("Dimension mismatch between 1D map and mask active voxels.")
-
-        grid_3d = np.zeros(mask_data.shape, dtype=np.float32)
-        grid_3d[mask_bool] = map_1d.astype(np.float32)
-
-        reconstructed_img = nib.Nifti1Image(grid_3d, mask_img.affine, header=mask_img.header)
-        nib.save(reconstructed_img, output_path)
+        Args:
+            z_scores: Raw 1D array of Gaonkar Z-scores (d_features,).
+            p_values: Raw 1D array of p-values (d_features,).
+            alpha: Significance level (default 0.05).
+            
+        Returns:
+            np.ndarray: FWE-corrected Z-scores map (d_features,).
+        """
+        self.logger.info(f"Applying FWE (Bonferroni) topological correction at alpha={alpha}...")
         
-        self.logger.success(f"3D NIfTI map written successfully to disk: {output_path}")
+        # multiple comparisons correction via statsmodels
+        reject_mask, pvals_corrected, _, _ = multipletests(p_values, alpha=alpha, method='bonferroni')
+        
+        survived_voxels = np.sum(reject_mask)
+        self.logger.info(f"FWE Correction complete: {survived_voxels} voxels survived the threshold.")
+        
+        if survived_voxels == 0:
+            self.logger.warning("Zero voxels survived FWE correction. Consider inspecting uncorrected maps.")
+            
+        fwe_z_scores = np.zeros_like(z_scores, dtype=float)
+        
+        # Keep original Z-score only if the null hypothesis was rejected
+        fwe_z_scores[reject_mask] = z_scores[reject_mask]
+        
+        return fwe_z_scores
+
+    def reconstruct_and_save_3d(self, flat_map: np.ndarray, brain_mask: np.ndarray, 
+                                affine: np.ndarray, out_path: str) -> None:
+        """
+        Inflates a 1D flattened feature array back into a 3D NIfTI volume using 
+        the reference boolean brain mask.
+        
+        Args:
+            flat_map: The 1D feature array (d_features,).
+            brain_mask: Boolean 3D tensor of the valid brain space.
+            affine: 4x4 spatial affine matrix (MNI space).
+            out_path: Full export path for the .nii.gz file.
+        """
+        self.logger.info(f"Reconstructing 3D tensor to save at: {out_path}")
+        
+        # Verify sizes
+        expected_features = int(np.sum(brain_mask))
+        if flat_map.shape[0] != expected_features:
+            self.logger.error(f"Shape mismatch: Mask has {expected_features} active voxels, flat_map has {flat_map.shape[0]}.")
+            raise ValueError("1D map does not align with the 3D boolean mask.")
+            
+        # Inflate back to 3D background
+        vol_3d = np.zeros_like(brain_mask, dtype=np.float32)
+        vol_3d[brain_mask] = flat_map.astype(np.float32)
+        
+        # Create and save NIfTI
+        img = nib.Nifti1Image(vol_3d, affine)
+        
+        os.makedirs(os.path.dirname(os.path.abspath(out_path)), exist_ok=True)
+        nib.save(img, out_path)
+        
+        self.logger.success("3D XAI Map cleanly exported to disk.")

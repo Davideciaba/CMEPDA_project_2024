@@ -1,0 +1,47 @@
+version: 2.1
+
+jobs:
+  build_and_test_python:
+    docker:
+      - image: cimg/python:3.10.13
+    resource_class: medium
+    steps:
+      - checkout
+
+      - restore_cache:
+          keys:
+            - v1-dependencies-{{ checksum "requirements.txt" }}
+            - v1-dependencies-
+
+      - run:
+          name: Install Python Dependencies
+          command: |
+            python -m pip install --upgrade pip
+            pip install -r requirements.txt
+            pip install pytest pytest-cov mock
+
+      - save_cache:
+          paths:
+            - ~/.cache/pip
+          key: v1-dependencies-{{ checksum "requirements.txt" }}
+
+      - run:
+          name: Execute Python Unit Tests
+          command: |
+            # Ensure the Python directory is in the system path for absolute imports
+            export PYTHONPATH="${PYTHONPATH}:$(pwd)/Python"
+            
+            # Create directory for test results
+            mkdir -p test-results
+            
+            # Execute pytest targeting the Tests directory
+            pytest Python/Tests/ --junitxml=test-results/junit.xml
+
+      - store_test_results:
+          path: test-results
+
+workflows:
+  version: 2
+  machine_learning_pipeline:
+    jobs:
+      - build_and_test_python
