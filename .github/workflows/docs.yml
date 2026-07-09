@@ -5,6 +5,11 @@ on:
     branches:
       - main
 
+# --- PATCH DI SICUREZZA: Richiesta esplicita di permessi di scrittura ---
+permissions:
+  contents: write
+# ------------------------------------------------------------------------
+
 jobs:
   build-and-deploy-docs:
     runs-on: ubuntu-latest
