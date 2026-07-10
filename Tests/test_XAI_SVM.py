@@ -30,7 +30,7 @@ class TestSVMAnalyticalXAI(unittest.TestCase):
         """Initializes the XAI engine with the actual CustomLogger."""
         self.logger = CustomLogger(name="TestXAI_SVM")
         self.logger.add_console_handler(level="INFO")
-        self.xai_engine = SVMAnalyticalXAI(logger=self.logger)
+        self.xai_engine = SVMExplainer(logger=self.logger)
 
     def test_compute_haufe_transform_math(self):
         """Validates the algebraic correctness of Haufe's associative transform with intercepts."""
@@ -77,7 +77,7 @@ class TestSVMAnalyticalXAI(unittest.TestCase):
         map1 = np.array([1.0, 2.0, 3.0])
         map2 = np.array([3.0, 4.0, 5.0])
         
-        aggregated = SVMAnalyticalXAI.aggregate_global_maps([map1, map2])
+        aggregated = SVMExplainer.aggregate_global_maps([map1, map2])
         expected = np.array([2.0, 3.0, 4.0])
         
         np.testing.assert_array_almost_equal(aggregated, expected)
