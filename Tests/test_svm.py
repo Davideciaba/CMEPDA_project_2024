@@ -39,7 +39,7 @@ class TestSVMEngine(unittest.TestCase):
         
         metrics = self.engine._evaluate_classification(y_true, y_pred, y_prob)
         self.assertTrue(math.isnan(metrics['AUROC']))
-def test_train_method(self):
+    def test_train_method(self):
         """Ensures the decoupled training API correctly performs Grid Search and fitting."""
         X_train = np.random.randn(20, 10)
         y_train = np.array([0] * 10 + [1] * 10)
