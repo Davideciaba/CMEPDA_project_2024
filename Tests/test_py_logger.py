@@ -84,36 +84,37 @@ class TestCustomLogger(unittest.TestCase):
         self.assertIn("Processing slice", output)
         self.assertIn("Module = VBM | Status = Active", output)
 
-    def test_context_manager(self):
+    @patch("sys.stdout", new_callable=io.StringIO)
+    def test_context_manager(self, mock_stdout: io.StringIO):
         """
-        Verify that the context manager temporarily injects and properly
-        cleans up metadata in a with block, writing to an isolated temp file.
+        Verify that the context manager temporarily injects and properly 
+        cleans up metadata in a with block.
         """
-        with tempfile.TemporaryDirectory() as temp_dir:
-            log_file = pathlib.Path(temp_dir) / "test_ctx.log"
-            log = CustomLogger()
-            log.add_file_handler(str(log_file), level="DEBUG")
+        log = CustomLogger()
+        log.add_console_handler(level="DEBUG")
+        
+        log.add_context("Global", "Active")
+        
+        # Enter context block
+        with log.context(Temporary="Yes", Task=1):
+            log.info("Inside block")
             
-            log.add_context("Global", "Active")
-            
-            # Enter context block
-            with log.context(Temporary="Yes", Task=1):
-                log.info("Inside block")
-                
-            log.info("Outside block")
-            log.shutdown() # Force flush to disk
-            
-            # Read output back from disk
-            with open(log_file, "r") as f:
-                output = f.read()
-                
-            # Asserts
-            self.assertIn("Global = Active | Temporary = Yes | Task = 1", output)
-            self.assertIn("Inside block", output)
-            
-            # Verify cleanup
-            outside_part = output.split("Outside block")[1]
-            self.assertNotIn("Temporary = Yes", outside_part)
+        log.info("Outside block")
+        
+        output = mock_stdout.getvalue()
+        lines = [line for line in output.splitlines() if line.strip()]
+        
+        # Check inside block log
+        inside_log = lines[0]
+        self.assertIn("Global = Active | Temporary = Yes | Task = 1", inside_log)
+        self.assertIn("Inside block", inside_log)
+        
+        # Check outside block log
+        outside_log = lines[1]
+        self.assertIn("Global = Active", outside_log)
+        self.assertNotIn("Temporary", outside_log)
+        self.assertNotIn("Task", outside_log)
+        self.assertIn("Outside block", outside_log)
 
     # Mock loguru.logger.add to prevent file creation and capture parameters
     @patch("loguru.logger.add")
