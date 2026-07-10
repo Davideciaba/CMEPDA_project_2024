@@ -18,7 +18,7 @@ elif parent_dir not in sys.path:
     sys.path.insert(0, parent_dir)
 
 import unittest
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch
 import numpy as np
 
 from Python.XAI.XAI_SVM import SVMExplainer
@@ -52,13 +52,19 @@ class TestSVMAnalyticalXAI(unittest.TestCase):
             y_train = np.array([0, 0, 0, 0, 1, 1, 1, 1])
             svm_weights = np.random.randn(N_FEATURES)
     
-            # Il metodo restituisce 2 variabili (Z e p-value), la FWE è ora a parte
-            z_map, p_map_raw = self.xai_engine.compute_gaonkar_maps(X_train, y_train, svm_weights)
+            SVM_C_PARAM = 1.0
+            SUPPORT_VECTORS = 8
+    
+            z_map, p_map_raw = self.xai_engine.compute_gaonkar_maps(
+                X_train, y_train, svm_weights, 
+                C_param=SVM_C_PARAM, 
+                n_support=SUPPORT_VECTORS
+            )
             self.assertEqual(z_map.shape[0], N_FEATURES)
 
-    @patch('XAI.XAI_SVM.os.path.exists')
-    @patch('XAI.XAI_SVM.nib.load')
-    @patch('XAI.XAI_SVM.nib.save')
+    @patch('Python.XAI.XAI_SVM.os.path.exists')
+    @patch('Python.XAI.XAI_SVM.nib.load')
+    @patch('Python.XAI.XAI_SVM.nib.save')
     def test_reconstruct_nifti_success(self, mock_save, mock_load, mock_exists):
         """Validates safe mapping from 1D back into 3D NIfTI."""
         with self.logger.context(Task="NIfTI_Reconstruction"):

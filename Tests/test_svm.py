@@ -3,6 +3,7 @@ Unit and Integration Testing Suite for the SVM Predictive Engine.
 Validates encapsulated methods, decoupled APIs (train/predict), and executes E2E pipelines.
 Designed for a flat directory structure (tests and models in the same folder).
 """
+import os
 import unittest
 from unittest.mock import patch, MagicMock
 import numpy as np
@@ -19,15 +20,16 @@ class TestSVMEngine(unittest.TestCase):
         """Initializes the Engine with a Mock Logger and reduced fold parameters."""
         self.logger = CustomLogger(name="TestSVM")
         self.logger.add_console_handler(level="INFO")
-        self.engine = SVMClassifier(logger=self.logger)
+        default_param_grid = {'C': [0.1, 1.0]}
+        self.engine = SVMClassifier(logger=self.logger, param_grid=default_param_grid)
 
     def test_evaluate_classification_standard(self):
         """Validates the mathematical calculation of clinical metrics."""
         y_true = np.array([0, 0, 1, 1])
         y_pred = np.array([0, 1, 1, 1])
-        y_prob = np.array([0.1, 0.8, 0.9, 0.85])
+        y_decision = np.array([0.1, 0.8, 0.9, 0.85])
 
-        metrics = self.engine._evaluate_classification(y_true, y_pred, y_prob)
+        metrics = self.engine._evaluate_classification(y_true, y_pred, y_decision)
         self.assertEqual(metrics['Accuracy'], 0.75)
         self.assertEqual(metrics['Sensitivity'], 1.0)
 
@@ -35,10 +37,11 @@ class TestSVMEngine(unittest.TestCase):
         """Verifies AUROC fallback mechanism for zero-variance data folds."""
         y_true = np.array([1, 1, 1, 1]) 
         y_pred = np.array([1, 1, 1, 1])
-        y_prob = np.array([0.9, 0.8, 0.9, 0.85])
+        y_decision = np.array([0.9, 0.8, 0.9, 0.85])
         
-        metrics = self.engine._evaluate_classification(y_true, y_pred, y_prob)
+        metrics = self.engine._evaluate_classification(y_true, y_pred, y_decision)
         self.assertTrue(math.isnan(metrics['AUROC']))
+
     def test_train_method(self):
         """Ensures the decoupled training API correctly performs Grid Search and fitting."""
         X_train = np.random.randn(20, 10)
@@ -100,18 +103,6 @@ class TestSVMEngine(unittest.TestCase):
         self.assertEqual(subjects[0], "SUB_01")
         self.assertEqual(y_data[0], 1)
 
-    def test_train_method(self):
-        """Ensures the decoupled training API correctly performs Grid Search and fitting."""
-        X_train = np.random.randn(20, 10)
-        y_train = np.array([0] * 10 + [1] * 10)
-        
-        self.engine.param_grid = {'C': [0.1, 1.0]}
-        dummy_inner_cv = [(np.arange(10), np.arange(10, 20))]
-        
-        best_c, best_model = self.engine.train(X_train, y_train, inner_cv_iterator=dummy_inner_cv)
-        self.assertIn(best_c, [0.1, 1.0])
-        self.assertIsInstance(best_model, SVC)
-
     def test_execute_nested_cv_integration(self):
         """Integration Test: Ensures the decoupled Double CV pipeline executes end-to-end."""
         with self.logger.context(session_id="SVM_Integration"):
@@ -123,8 +114,6 @@ class TestSVMEngine(unittest.TestCase):
             y_data = np.array([0] * (N_SAMPLES // 2) + [1] * (N_SAMPLES // 2))
             np.random.shuffle(y_data)
             X_data[y_data == 1] += 0.5
-            
-            self.engine.param_grid = {'C': [0.1, 1.0]}
             
             dummy_cv_splits = [{
                 'fold': 1,
