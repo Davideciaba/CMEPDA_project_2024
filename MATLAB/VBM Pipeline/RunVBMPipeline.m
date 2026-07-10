@@ -38,13 +38,19 @@ resultsDir = fullfile(scriptPath, 'Results');
 logDir = fullfile(scriptPath, 'Log Files');
 logPath = fullfile(logDir, 'VBMPipeline.log');
 csvFileName = 'covariateADCTRLsexAgeTIV.csv';
+SPM_DIR = 'C:/Users/utente/Desktop/spm';
+try
+    addpath(SPM_DIR); 
+catch ME
+    error('%s directory not found. Error: %s', SPM_DIR, ME.message);
+end
 tpmPath = fullfile(fileparts(which('spm')), 'tpm', 'TPM.nii');
 
 % Add utils path for utility functions
 try
     addpath(utilsPath); 
 catch ME
-    error('MATLAB/utils directory not found. Error: %s', ME.message);
+    error('%s directory not found. Error: %s', utilsPath, ME.message);
 end
 
 % Initialize the logger to track the comparison

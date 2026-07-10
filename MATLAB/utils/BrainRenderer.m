@@ -258,17 +258,16 @@ classdef BrainRenderer < handle
             if bgMax == 0, bgMax = 1; end
             
             globalMask = (mapA > 0) | (mapB > 0);
-            
+            if ~any(globalMask(:))
+                obj.PrivateLogger.warning('Both maps are entirely empty. No overlap to visualize.');
+                return;
+            end
+
             % Returns both internal voxel matrix indices and true physical MNI Z coordinates.
             [zSlicesVoxel, zMmArray] = obj.getVoxelIndicesFromMni(sliceConfig, affineMat, size(bgVolume), globalMask);
             
-            numSlices = length(zSlicesVoxel);
-            if numSlices == 0
-                obj.PrivateLogger.warning('No valid slices found in the requested MNI range. Plotting aborted.');
-                return;
-            end
-            
             % Square representation
+            numSlices = length(zSlicesVoxel);
             gridCols = ceil(sqrt(numSlices));
             gridRows = ceil(numSlices / gridCols);
             
@@ -339,8 +338,8 @@ classdef BrainRenderer < handle
             % T-stats Upper Limit
             maxTValue = max(thresholdedMap(:));
             if maxTValue <= statThresh
-                obj.PrivateLogger.warning('Zero voxels survived the applied threshold. Applying an epsilon to the max.');
-                maxTValue = statThresh + eps;
+                obj.PrivateLogger.warning('Zero voxels survived the applied threshold %.2f. Plotting aborted.', statThresh);
+                return;
             end
             
             activeMask = thresholdedMap >= statThresh;
@@ -349,11 +348,6 @@ classdef BrainRenderer < handle
             [zSlicesVoxel, zMmArray] = obj.getVoxelIndicesFromMni(sliceConfig, affineMat, size(bgVolume), activeMask);
             
             numSlices = length(zSlicesVoxel);
-            if numSlices == 0
-                obj.PrivateLogger.warning('No valid slices found in the requested MNI range. Plotting aborted.');
-                return;
-            end
-            
             totalPanels = numSlices + 1; % +1 to reserve space for the Colorbar
             gridCols = ceil(sqrt(totalPanels));
             gridRows = ceil(totalPanels / gridCols);
@@ -399,8 +393,8 @@ classdef BrainRenderer < handle
     end
     
     methods (Access = private)
+        % HELPER: getVoxelIndicesFromMni
         function [zSlicesVoxel, zMmArray] = getVoxelIndicesFromMni(obj, sliceConfig, affineMat, tensorSize, activeMask)
-            % HELPER: getVoxelIndicesFromMni
             % PURPOSE: Converts MNI millimeters to matrix voxel indices. 
             %   Returns both the sorted voxel indices and their true physical
             %   MNI Z coordinates.
@@ -413,29 +407,23 @@ classdef BrainRenderer < handle
                 stepMm = sliceConfig;
                 activeSlices = squeeze(sum(activeMask, [1, 2]));
                 activeIdx = find(activeSlices > 0);
-                
-                if isempty(activeIdx)
-                    obj.PrivateLogger.warning('getVoxelIndicesFromMni:NoActiveVoxels', 'No active voxels found in either map. Fallback to middle slice.');
-                    zSlicesVoxel = round(maxZ / 2);
-                    mniArray = []; % Fallback handled below
-                else
-                    % Matrix multiplication to extract MNI boundaries
-                    voxBounds = [voxCenterXY(1), voxCenterXY(1);
-                                 voxCenterXY(2), voxCenterXY(2);
-                                 activeIdx(1),   activeIdx(end);
-                                 1,              1];
-                                 
-                    mniBounds = affineMat * voxBounds;
+
+                % Matrix multiplication to extract MNI boundaries
+                voxBounds = [voxCenterXY(1), voxCenterXY(1);
+                             voxCenterXY(2), voxCenterXY(2);
+                             activeIdx(1),   activeIdx(end);
+                             1,              1];
+            
+                mniBounds = affineMat * voxBounds;
                     
-                    mniMin = min(mniBounds(3, :));
-                    mniMax = max(mniBounds(3, :));
+                mniMin = min(mniBounds(3, :));
+                mniMax = max(mniBounds(3, :));
                     
-                    % Pad the viewing box by 1 step before and after the active region
-                    mniMin = mniMin - stepMm;
-                    mniMax = mniMax + stepMm;
+                % Pad the viewing box by 1 step before and after the active region
+                mniMin = mniMin - stepMm;
+                mniMax = mniMax + stepMm;
                     
-                    mniArray = mniMin : stepMm : mniMax;
-                end
+                mniArray = mniMin : stepMm : mniMax;
                 
             elseif numel(sliceConfig) == 3
                 % MODE 2: MANUAL BOUNDS [start_mm, step_mm, stop_mm]
@@ -486,7 +474,8 @@ classdef BrainRenderer < handle
                 trueMniCoords = affineMat * trueSlicesMat;
                 zMmArray = trueMniCoords(3, :);
             else
-                zMmArray = [];
+                obj.PrivateLogger.error('No valid voxel indices found after MNI to voxel conversion. Aborting rendering.');
+                error('BrainRenderer:NoValidSlices', 'No valid voxel indices found after MNI to voxel conversion.');
             end
         end
 

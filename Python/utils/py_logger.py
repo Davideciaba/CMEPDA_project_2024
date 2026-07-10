@@ -7,7 +7,7 @@ It is architected to mirror the exact API and functionality of the MATLAB Logger
 KEY FEATURES:
 - Log Levels: TRACE, DEBUG, INFO, SUCCESS, WARNING, ERROR, CRITICAL.
 - Multiple Handlers: Dynamically configure console and file sinks.
-- Colored Output: Native support via Loguru.
+- Colored Output: Native support via loguru.
 - File Rotation: Native rotation and compression for file sinks.
 - Contextual Data: Dynamically attach extra key-value context to all logs.
         It can wrap logs from MATLAB and Python.

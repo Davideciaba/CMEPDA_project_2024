@@ -9,7 +9,6 @@ Requirements:
     pip install loguru
     pip install matlabengine
 """
-
 import io
 import time
 import pathlib
@@ -39,7 +38,7 @@ class MatlabTask:
     def __post_init__(self):
         self.script_path = pathlib.Path(self.script_path).resolve()
         self.log_path = pathlib.Path(self.log_path).resolve()
-        # The dynamic function name matching the MATLAB file name (without .m)
+        # The function name matching the MATLAB file name (without .m)
         self.name = self.script_path.stem
 
 
@@ -80,7 +79,9 @@ class MatlabOrchestrator:
 
     def __exit__(self, exc_type, exc_val, exc_tb):
         """Context manager exit point. Ensures graceful teardown of the engine."""
-        self.stop_engine()
+        # Detect if the context is exiting due to an unhandled exception
+        is_crash = exc_type is not None
+        self.stop_engine(is_crash=is_crash)
 
     def start_engine(self) -> None:
         """Initializes the MATLAB Engine and injects global dependencies."""
@@ -107,13 +108,22 @@ class MatlabOrchestrator:
             self.log.critical(f"Unexpected system failure during boot: {e}")
             raise
 
-    def stop_engine(self) -> None:
-        """Gracefully terminates the MATLAB Engine."""
+    def stop_engine(self, is_crash: bool = False) -> None:
+        """Gracefully terminates the MATLAB Engine. Context-aware of crashes."""
         if self.eng is not None:
-            self.log.info("Shutting down MATLAB Engine...")
+            if is_crash:
+                self.log.warning("Emergency shutdown of MATLAB Engine triggered...")
+            else:
+                self.log.info("Shutting down MATLAB Engine...")
+                
             self.eng.quit()
             self.eng = None
-            self.log.success("MATLAB Engine terminated.")
+            
+            if is_crash:
+                self.log.error("MATLAB Engine terminated abnormally due to an exception.")
+            else:
+                self.log.success("MATLAB Engine terminated.")
+
 
     def run_all(self) -> None:
         """Executes all queued MATLAB tasks sequentially."""
@@ -249,56 +259,11 @@ class MatlabOrchestrator:
                     self.log.success(f"Task [{task.name}] executed completely.")
                 except Exception as execution_err:
                     self.log.critical(f"MATLAB Execution crashed fatally in [{task.name}]:\n{execution_err}")
+                    raise
 
             except Exception as e:
                 self.log.error(f"Python Orchestration error during execution setup for [{task.name}]: {e}")
+                raise
             finally:
                 dummy_out.close()
                 dummy_err.close()
-
-
-"""if __name__ == "__main__":
-    
-    # Define absolute paths dynamically
-    BASE_DIR = pathlib.Path(__file__).parent.resolve()
-    MASK_COMP_DIR = BASE_DIR / "MATLAB" / "Mask Comparison"
-    VBM_PIPE_DIR = BASE_DIR / "MATLAB" / "VBM Pipeline"
-    SPM_DIRECTORY = pathlib.Path("C:/Users/utente/Desktop/spm")
-
-    # 1. Initialize Python Logger
-    main_log = CustomLogger(name="Orchestrator")
-    main_log.add_console_handler(level="DEBUG", use_colors=True)
-    main_log.add_file_handler("pipeline_orchestrator.log", level="TRACE")
-    
-    main_log.add_context("Role", "Orchestrator")
-    main_log.info("Python Orchestrator Started.")
-
-    # 2. Define Tasks (Script Path + Expected Log Path)
-    task_queue = [
-        #MatlabTask(
-        #    script_path=MASK_COMP_DIR / "RunMaskComparison.m",
-        #    log_path=MASK_COMP_DIR / "Log Files" / "maskComparison.log"
-        #),
-        # You can append the VBM Pipeline here seamlessly
-        MatlabTask(
-            script_path=VBM_PIPE_DIR / "RunVBMPipeline.m",
-            log_path=VBM_PIPE_DIR / "Log Files" / "VBMPipeline.log"
-        )
-    ]
-
-    # 3. Execute tasks within the Orchestrator Context Manager
-    try:
-        # The Context Manager (with statement) automatically handles engine start & shutdown
-        with MatlabOrchestrator(
-            logger=main_log, 
-            tasks=task_queue, 
-            include_paths=[SPM_DIRECTORY]
-        ) as orchestrator:
-            
-            orchestrator.run_all()
-            
-    except Exception as fatal_e:
-        main_log.critical(f"Orchestrator encountered a fatal infrastructure error: {fatal_e}")
-    finally:
-        main_log.info("Orchestrator shutdown complete.")
-        main_log.shutdown()"""

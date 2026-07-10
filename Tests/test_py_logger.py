@@ -17,7 +17,7 @@ current_dir= pathlib.Path(__file__).resolve().parent
 parent_dir= current_dir.parent
 
 # Add the parent directory to sys.path to allow imports from there
-sys.path.insert(0, str(parent_dir))
+sys.path.append(str(parent_dir))
 
 # Import the target module
 from Python.utils.py_logger import CustomLogger

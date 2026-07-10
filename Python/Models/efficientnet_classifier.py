@@ -24,7 +24,14 @@ from sklearn.metrics import (
 # MONAI Native Components
 from monai.networks.nets import EfficientNetBN
 from monai.data import DataLoader, Dataset
-from monai.transforms import Compose, LoadImaged, EnsureChannelFirstd, ScaleIntensityd, EnsureTyped
+from monai.transforms import (
+    Compose, 
+    LoadImaged, 
+    EnsureChannelFirstd, 
+    ScaleIntensityd, 
+    EnsureTyped,
+    ResizeWithPadOrCropd
+)
 
 # --- GLOBAL CONFIGURATION CONSTANTS ---
 CNN_LR_GRID = [1e-3, 1e-4]
@@ -89,7 +96,20 @@ class EfficientNetClassifier:
         keys = ["image"]
         transforms = []
         if not self.is_dummy:
-            transforms.extend([LoadImaged(keys=keys), EnsureChannelFirstd(keys=keys), ScaleIntensityd(keys=keys)])
+            transforms.extend([
+                LoadImaged(keys=keys), 
+                EnsureChannelFirstd(keys=keys),
+                # Spatial Formatting: Adapts 121x145x121 inputs to strict 128x128x128 dimensions.
+                # Mode "constant" ensures background voxel additions equal 0 by default.
+                # Method "symmetric" balances both padding and cropping mathematically.
+                ResizeWithPadOrCropd(
+                    keys=keys,
+                    spatial_size=(128, 128, 128),
+                    method="symmetric",
+                    mode="constant"
+                ),
+                ScaleIntensityd(keys=keys)
+            ])
         transforms.append(EnsureTyped(keys=["image", "label"], track_meta=False))
         return Compose(transforms)
 

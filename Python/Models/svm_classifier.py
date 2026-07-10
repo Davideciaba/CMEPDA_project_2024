@@ -7,25 +7,39 @@ and pure inference, ensuring API uniformity with the Deep Learning ecosystem.
 
 Designed as a pure library module without global execution blocks or manual path injections.
 """
-import os
 import numpy as np
 import pandas as pd
 import nibabel as nib
 from typing import Dict, List, Tuple, Any
+
+from sklearn.pipeline import Pipeline
+from sklearn.preprocessing import StandardScaler
 from sklearn.svm import SVC
 from sklearn.model_selection import GridSearchCV
 from sklearn.metrics import (
-    accuracy_score, 
+    accuracy_score,
     balanced_accuracy_score, 
     roc_auc_score, 
     f1_score, 
-    confusion_matrix
+    confusion_matrix,
+    roc_curve
 )
 from Python.utils.py_logger import CustomLogger
+from sklearn.base import BaseEstimator, TransformerMixin
 
-# --- GLOBAL CONFIGURATION CONSTANTS ---
-SVM_C_GRID = [0.0001, 0.001, 0.01, 0.1, 1.0, 10.0, 100.0]
+class DtypeDebugger(BaseEstimator, TransformerMixin):
+    """
+    Custom Passthrough Transformer for debugging Scikit-Learn Pipelines.
+    Intercepts the array passing through the pipeline, prints its memory footprint/dtype, 
+    and passes it unchanged to the next step.
+    """
+    def fit(self, X, y=None):
+        return self
 
+    def transform(self, X, y=None):
+        # Print the exact dtype and shape during the GridSearch execution
+        print(f"\n[DEBUG Pipeline] Array Shape: {X.shape} | Current Dtype: {X.dtype}")
+        return X
 
 class SVMClassifier:
     """
@@ -33,9 +47,9 @@ class SVMClassifier:
     Encapsulates all mathematical processing operations and decoupled inference APIs.
     """
 
-    def __init__(self, logger: CustomLogger):
+    def __init__(self, logger: CustomLogger, param_grid: Dict[str, List[Any]]):
         self.logger = logger
-        self.param_grid = {'C': SVM_C_GRID}
+        self.param_grid = param_grid
 
     @staticmethod
     def load_real_data(csv_path: str, mask_path: str) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
@@ -51,12 +65,12 @@ class SVMClassifier:
         for _, row in df.iterrows():
             subjects.append(str(row['subject_id']))
             y_list.append(int(row['label']))
-            img_data = nib.load(row['file_path']).get_fdata()
+            img_data = nib.load(row['file_path']).get_fdata(dtype=np.float32)
             
             # WHY: Boolean Indexing directly extracts the valid values into a 1D vector.
             X_list.append(img_data[mask_bool])
             
-        return np.array(subjects), np.array(X_list), np.array(y_list)
+        return np.array(subjects), np.array(X_list, dtype=np.float32), np.array(y_list)
 
     def _evaluate_classification(self, y_true: np.ndarray, y_pred: np.ndarray, y_prob: np.ndarray) -> Dict[str, float]:
         """Computes clinical metrics safely, guarding against mathematical edge-cases."""
@@ -83,18 +97,38 @@ class SVMClassifier:
         Unified Training API.
         Executes the Inner Loop tuning to find the optimal 'C' regularization coefficient 
         and fits the final estimator on the full training fold.
+        Returns:
+            - best_c: The optimal hyperparameter
+            - mean_cv_bal_acc: Mean balanced accuracy across the Inner Folds for best_c
+            - std_cv_bal_acc: Standard deviation of balanced accuracy for best_c
+            - best_pipeline: The fitted pipeline object
         """
-        svm_base = SVC(kernel='linear', class_weight='balanced', probability=True)
+        base_pipeline = Pipeline([
+            ('scaler', StandardScaler(dtype=np.float32)),
+            ('debugger', DtypeDebugger()),
+            ('svc', SVC(kernel='linear', class_weight='balanced'))
+        ])
+        
+        grid_params = {f"svc__{k}": v for k, v in self.param_grid.items()}
         
         grid_search = GridSearchCV(
-            estimator=svm_base, 
-            param_grid=self.param_grid, 
-            cv=inner_cv_iterator, 
+            estimator=base_pipeline, 
+            param_grid=grid_params, 
+            cv=inner_cv_iterator,
             scoring='balanced_accuracy', 
-            n_jobs=-1
+            n_jobs=1
         )
         grid_search.fit(X_train, y_train)
-        return grid_search.best_params_['C'], grid_search.best_estimator_
+        
+        # Extract hyperparameters and their internal CV statistics
+        best_c = grid_search.best_params_['svc__C']
+        best_idx = grid_search.best_index_
+        mean_cv_bal_acc = grid_search.cv_results_['mean_test_score'][best_idx]
+        std_cv_bal_acc = grid_search.cv_results_['std_test_score'][best_idx]
+        
+        best_pipeline = grid_search.best_estimator_
+        
+        return best_c, mean_cv_bal_acc, std_cv_bal_acc, best_pipeline
 
     def predict(self, model: SVC, X_test: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
         """
@@ -103,8 +137,8 @@ class SVMClassifier:
         and continuous probabilities safely.
         """
         y_pred = model.predict(X_test)
-        y_prob = model.predict_proba(X_test)[:, 1]
-        return y_pred, y_prob
+        y_decision = model.decision_function(X_test)
+        return y_pred, y_decision
 
     def execute_nested_cv(self, X: np.ndarray, y: np.ndarray, subjects: np.ndarray, cv_splits: List[Dict[str, Any]]) -> Tuple[pd.DataFrame, List[Dict[str, Any]]]:
         """Orchestrates the macro Double Cross-Validation pipeline."""
@@ -125,16 +159,31 @@ class SVMClassifier:
             # Map Relative Inner Indices for GridSearchCV
             inner_iterator = split['inner_splits_relative']
             
-            best_c, best_model = self.train(X_train, y_train, inner_iterator)
-            y_pred, y_prob = self.predict(best_model, X_test)
+            best_c, mean_cv_acc, std_cv_acc, best_model = self.train(X_train, y_train, inner_iterator)
+            y_pred, y_decision = self.predict(best_model, X_test)
 
-            metrics = self._evaluate_classification(y_test, y_pred, y_prob)
+            metrics = self._evaluate_classification(y_test, y_pred, y_decision)
             metrics['Fold'] = fold_idx
+            metrics['Optimal_C'] = best_c
+            metrics['Inner_CV_BalAcc_Mean'] = mean_cv_acc
+            metrics['Inner_CV_BalAcc_Std'] = std_cv_acc
+
             fold_metrics_list.append(metrics)
+
+            # Calculate True/False Positive Rates for the Renderer
+            fpr, tpr, _ = roc_curve(y_test, y_decision)
             
             fold_artifacts.append({
-                'fold_id': fold_idx, 'optimal_C': best_c, 'test_subjects': subjects[test_idx],
-                'y_true': y_test, 'y_pred': y_pred, 'y_prob': y_prob
+                'fold_id': fold_idx, 
+                'optimal_C': best_c, 
+                'test_subjects': subjects[test_idx],
+                'y_true': y_test, 
+                'y_pred': y_pred, 
+                'y_decision': y_decision,
+                'roc_fpr': fpr,
+                'roc_tpr': tpr,
+                'model': best_model,
+                'train_idx': train_idx
             })
 
         self.logger.info("Nested CV Evaluation Completed.")

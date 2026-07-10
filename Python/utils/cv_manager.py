@@ -4,6 +4,7 @@ Cross-Validation Manager Module.
 Centralizes the generation of Outer and Inner folds to guarantee absolute 
 synchronization between independent predictive engines (e.g., SVM and EfficientNet).
 """
+import json
 import numpy as np
 from sklearn.model_selection import StratifiedKFold, train_test_split
 from typing import List, Dict, Any
@@ -29,10 +30,8 @@ class CVManager:
             - 'outer_train_idx': Absolute indices for training.
             - 'outer_test_idx': Absolute indices for testing.
             - 'inner_splits_relative': List of tuples (in_tr, in_val) relative to outer_train_idx.
-            - 'final_train_idx_relative': 80% split relative to outer_train_idx (for CNNs).
-            - 'final_val_idx_relative': 20% split relative to outer_train_idx (for CNNs).
         """
-        outer_cv = StratifiedKFold(n_splits=self.outer_folds, shuffle=False, random_state=self.random_state)
+        outer_cv = StratifiedKFold(n_splits=self.outer_folds, shuffle=True, random_state=self.random_state)
         splits_registry = []
 
         for fold_idx, (train_idx, test_idx) in enumerate(outer_cv.split(np.zeros(len(y)), y), start=1):
@@ -41,23 +40,43 @@ class CVManager:
             # INNER CV: Generated relatively to y_train for Scikit-Learn GridSearchCV compatibility
             inner_cv = StratifiedKFold(n_splits=self.inner_folds, shuffle=True, random_state=self.random_state)
             inner_splits_relative = list(inner_cv.split(np.zeros(len(y_train)), y_train))
-            
-            # FINAL STRUCTURAL SPLIT: 80/20 split on the Training Set for Deep Learning Early Stopping
-            # Stratified to maintain class balance in the validation set
-            tr_rel_idx, val_rel_idx = train_test_split(
-                np.arange(len(y_train)), 
-                test_size=0.2, 
-                stratify=y_train, 
-                random_state=self.random_state
-            )
 
             splits_registry.append({
                 'fold': fold_idx,
                 'outer_train_idx': train_idx,
                 'outer_test_idx': test_idx,
-                'inner_splits_relative': inner_splits_relative,
-                'final_train_idx_relative': tr_rel_idx,
-                'final_val_idx_relative': val_rel_idx
+                'inner_splits_relative': inner_splits_relative
             })
             
         return splits_registry
+
+    @staticmethod
+    def save_to_json(splits_registry: List[Dict[str, Any]], subjects: np.ndarray, filepath: str) -> None:
+        """
+        Serializes Numpy indices to standard JSON lists and injects Subject ID 
+        signatures to prevent Data Leakage in decoupled scripts.
+        """
+        serializable_splits = []
+        for split in splits_registry:
+            s_dict = {}
+            for k, v in split.items():
+                if isinstance(v, np.ndarray):
+                    s_dict[k] = v.tolist()
+                elif isinstance(v, list) and len(v) > 0 and isinstance(v[0], tuple):
+                    # Handle inner_splits_relative tuples of numpy arrays
+                    s_dict[k] = [[tr.tolist(), val.tolist()] for tr, val in v]
+                else:
+                    s_dict[k] = v
+                    
+            # Inject SECURITY SIGNATURE: The exact subject IDs expected in the test fold
+            s_dict['security_test_subjects'] = subjects[split['outer_test_idx']].tolist()
+            serializable_splits.append(s_dict)
+
+        with open(filepath, 'w', encoding='utf-8') as f:
+            json.dump(serializable_splits, f, indent=4)
+
+    @staticmethod
+    def load_from_json(filepath: str) -> List[Dict[str, Any]]:
+        """Loads serialized splits. Lists function identically to arrays for Numpy indexing."""
+        with open(filepath, 'r', encoding='utf-8') as f:
+            return json.load(f)
