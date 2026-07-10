@@ -43,11 +43,14 @@ class TestSVMEngine(unittest.TestCase):
     def test_train_method(self):
         """Ensures the decoupled training API correctly performs Grid Search and fitting."""
         X_train = np.random.randn(20, 10)
-        y_train = np.array([0] * 10 + [1] * 10)
+        
+        # FIX: Array alternato [0, 1, 0, 1...] per garantire varianza in ogni split CV
+        y_train = np.array([0, 1] * 10)
         
         self.engine.param_grid = {'C': [0.1, 1.0]}
-        best_c, best_model = self.engine.train(X_train, y_train)
-
+        dummy_inner_cv = [(np.arange(10), np.arange(10, 20))]
+        
+        best_c, best_model = self.engine.train(X_train, y_train, inner_cv_iterator=dummy_inner_cv)
         self.assertIn(best_c, [0.1, 1.0])
         self.assertIsInstance(best_model, SVC)
 
