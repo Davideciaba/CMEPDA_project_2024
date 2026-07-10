@@ -39,8 +39,7 @@ class TestSVMEngine(unittest.TestCase):
         
         metrics = self.engine._evaluate_classification(y_true, y_pred, y_prob)
         self.assertTrue(math.isnan(metrics['AUROC']))
-
-    def test_train_method(self):
+def test_train_method(self):
         """Ensures the decoupled training API correctly performs Grid Search and fitting."""
         X_train = np.random.randn(20, 10)
         y_train = np.array([0] * 10 + [1] * 10)
@@ -56,7 +55,7 @@ class TestSVMEngine(unittest.TestCase):
         
         self.assertIn(best_c, [0.1, 1.0])
         self.assertIsInstance(best_model, SVC)
-        
+
     def test_predict_method(self):
         """Validates the pure inference API structure and array returns."""
         mock_model = MagicMock(spec=SVC)
