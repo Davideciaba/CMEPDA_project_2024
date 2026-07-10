@@ -19,8 +19,8 @@ import unittest
 from unittest.mock import patch, MagicMock
 import numpy as np
 
-from XAI.ig_renderer import IGRenderer
-from utils.py_logger import CustomLogger
+from Python.XAI.ig_renderer import IGRenderer
+from Python.utils.py_logger import CustomLogger
 
 class TestIGRenderer(unittest.TestCase):
 

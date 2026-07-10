@@ -35,11 +35,11 @@ import numpy as np
 import torch
 
 # Importiamo dai rispettivi package della struttura del progetto
-from XAI.XAI_EfficientNet import DLExplainableAI
+from Python.XAI.XAI_EfficientNet import DLExplainableAI
 
-from Models.efficientnet_classifier import EfficientNetClassifier as ModelEngine
+from Python.Models.efficientnet_classifier import EfficientNetClassifier as ModelEngine
 
-from utils.py_logger import CustomLogger
+from Python.utils.py_logger import CustomLogger
 
 
 class TestDLExplainableAI(unittest.TestCase):

@@ -22,8 +22,8 @@ if os.path.exists(python_src_dir) and python_src_dir not in sys.path:
 elif parent_dir not in sys.path:
     sys.path.insert(0, parent_dir)
 
-from XAI.roi_analyzer import ROIAnalyzer
-from utils.py_logger import CustomLogger
+from Python.XAI.roi_analyzer import ROIAnalyzer
+from Python.utils.py_logger import CustomLogger
 
 class TestROIAnalyzer(unittest.TestCase):
 

@@ -21,8 +21,8 @@ import unittest
 from unittest.mock import patch, MagicMock
 import numpy as np
 
-from XAI.XAI_SVM import SVMAnalyticalXAI
-from utils.py_logger import CustomLogger
+from Python.XAI.XAI_SVM import SVMExplainer
+from Python.utils.py_logger import CustomLogger
 
 class TestSVMAnalyticalXAI(unittest.TestCase):
 

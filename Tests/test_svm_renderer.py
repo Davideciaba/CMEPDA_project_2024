@@ -19,8 +19,8 @@ import unittest
 from unittest.mock import patch, MagicMock
 import numpy as np
 
-from XAI.svm_renderer import SVMRenderer
-from utils.py_logger import CustomLogger
+from Python.XAI.svm_renderer import SVMRenderer
+from Python.utils.py_logger import CustomLogger
 
 class TestSVMRenderer(unittest.TestCase):
 
