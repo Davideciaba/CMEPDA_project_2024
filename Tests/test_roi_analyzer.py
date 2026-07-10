@@ -62,7 +62,7 @@ class TestROIAnalyzer(unittest.TestCase):
         xai_vol = np.zeros((3, 3, 3))
         xai_vol[0, 0, 0] = 0.5  # Positive attribution in Hippocampus
         xai_vol[0, 1, 0] = -0.5 # Negative attribution in Hippocampus
-        xai_vol[1, 0, 0] = -1.0 # Strong negative attribution in Amygdala
+        xai_vol[1, 0, 0] = -5.0 # Strong negative attribution in Amygdala
         
         mock_xai = MagicMock()
         mock_xai.get_fdata.return_value = xai_vol
@@ -76,14 +76,14 @@ class TestROIAnalyzer(unittest.TestCase):
         # Assertions
         self.assertEqual(len(df), 2)
         
-        # Based on absolute sorting, Amygdala (| -1.0 | = 1.0) should be ranked 1st
+        # Based on global density sorting, Amygdala (Total signal: 5.0 / 9 voxels = 0.555) is 1st
         self.assertEqual(df.iloc[0]['ROI_Name'], 'Amygdala')
-        self.assertEqual(df.iloc[0]['Mean_Abs_Importance'], 1.0)
+        self.assertAlmostEqual(df.iloc[0]['Mean_ROI_Signal'], 5.0 / 9.0, places=4)
         
-        # Hippocampus should be ranked 2nd. Mean of |0.5| and |-0.5| is 0.5
+        # Hippocampus is 2nd. (Total signal: 1.0 / 9 voxels = 0.111)
         self.assertEqual(df.iloc[1]['ROI_Name'], 'Hippocampus')
-        self.assertEqual(df.iloc[1]['Mean_Abs_Importance'], 0.5)
-
+        self.assertAlmostEqual(df.iloc[1]['Mean_ROI_Signal'], 1.0 / 9.0, places=4)
+        
     @patch('XAI.roi_analyzer.os.path.exists')
     @patch('XAI.roi_analyzer.nib.load')
     @patch('XAI.roi_analyzer.pd.read_csv')

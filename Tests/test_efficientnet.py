@@ -63,10 +63,10 @@ class TestCNNEngine(unittest.TestCase):
         self.assertEqual(len(y_pred), 2)
         self.assertEqual(len(y_prob), 2)
         self.assertTrue(all(0.0 <= p <= 1.0 for p in y_prob))
-
-    # I target dei patch ora puntano al namespace locale "EfficientNet"
-    @patch('EfficientNet.os.path.exists')
-    @patch('EfficientNet.pd.read_csv')
+        
+    # I target dei patch puntano al percorso REALE del file in cui sono importati
+    @patch('Python.Models.efficientnet_classifier.os.path.exists')
+    @patch('Python.Models.efficientnet_classifier.pd.read_csv')
     def test_load_data_dicts_mocked(self, mock_read_csv, mock_exists):
         """Mocks the OS file system to validate the generation of Lazy Loading pointers."""
         mock_exists.return_value = True
@@ -77,7 +77,7 @@ class TestCNNEngine(unittest.TestCase):
 
     def test_execute_nested_cv_integration(self):
         """
-        Integration Test: Generates Dummy Tensor Data to ensure the full Deep Learning 
+        Integration Test: Generates Dummy Tensor Data to ensure the full Deep Learning
         pipeline utilizes the decoupled methods correctly end-to-end.
         """
         with self.logger.context(session_id="CNN_Integration"):
@@ -90,16 +90,26 @@ class TestCNNEngine(unittest.TestCase):
             
             data_dicts = [{"image": torch.randn(1, D, H, W, dtype=torch.float32), "label": int(lbl)} for lbl in y_data]
             
-            # Import locale per l'override della griglia
             EfficientNetClassifier.CNN_LR_GRID = [1e-3]
             EfficientNetClassifier.CNN_WD_GRID = [1e-4]
             
+            # Creazione di split CV fittizi per accontentare i requisiti del modulo
+            dummy_cv_splits = [{
+                'fold': 1,
+                'outer_train_idx': np.arange(8),
+                'outer_test_idx': np.arange(8, 16),
+                'inner_splits_relative': [(np.arange(6), np.arange(6, 8))],
+                'final_train_idx_relative': np.arange(6),
+                'final_val_idx_relative': np.arange(6, 8)
+            }]
+            
             df_metrics, artifacts = self.engine.execute_nested_cv(
-                data_dicts, y_data, subjects, batch_size=2, max_epochs=2, patience=1, num_workers=0
+                data_dicts, y_data, subjects, cv_splits=dummy_cv_splits,
+                batch_size=2, max_epochs=2, patience=1, num_workers=0
             )
             
             self.assertIsInstance(df_metrics, pd.DataFrame)
-            self.assertEqual(len(df_metrics), 2)
+            self.assertEqual(len(df_metrics), 1)
 
 if __name__ == '__main__':
     unittest.main()

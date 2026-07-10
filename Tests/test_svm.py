@@ -64,18 +64,17 @@ class TestSVMEngine(unittest.TestCase):
         self.assertEqual(len(y_pred), 3)
         self.assertEqual(y_prob[1], 0.8, "Probability extraction failed to target the positive class.")
 
-    # I target dei patch ora puntano al namespace locale "SVM"
-    @patch('SVM.os.path.exists')
+    # Path aggiornati al namespace corretto
+    @patch('Python.Models.svm_classifier.os.path.exists')
     def test_load_real_data_file_missing(self, mock_exists):
         """Validates that the Engine correctly aborts if data files are missing."""
-        mock_exists.return_value = False 
-        
+        mock_exists.return_value = False
         with self.assertRaises(FileNotFoundError):
             SVMClassifier.load_real_data("missing.csv", "missing_mask.nii")
 
-    @patch('SVM.os.path.exists')
-    @patch('SVM.pd.read_csv')
-    @patch('SVM.nib.load')
+    @patch('Python.Models.svm_classifier.os.path.exists')
+    @patch('Python.Models.svm_classifier.pd.read_csv')
+    @patch('Python.Models.svm_classifier.nib.load')
     def test_load_real_data_success(self, mock_nib_load, mock_read_csv, mock_exists):
         """Mocks the OS file system to validate structural 3D-to-1D flattening and parsing."""
         mock_exists.return_value = True
@@ -86,7 +85,7 @@ class TestSVMEngine(unittest.TestCase):
         })
         
         mock_img = MagicMock()
-        mock_img.get_fdata.return_value = np.ones((10, 10, 10)) 
+        mock_img.get_fdata.return_value = np.ones((10, 10, 10))
         mock_nib_load.return_value = mock_img
         
         subjects, X_data, y_data = SVMClassifier.load_real_data("dummy.csv", "mask.nii")
@@ -95,6 +94,18 @@ class TestSVMEngine(unittest.TestCase):
         self.assertEqual(len(subjects), 2)
         self.assertEqual(subjects[0], "SUB_01")
         self.assertEqual(y_data[0], 1)
+
+    def test_train_method(self):
+        """Ensures the decoupled training API correctly performs Grid Search and fitting."""
+        X_train = np.random.randn(20, 10)
+        y_train = np.array([0] * 10 + [1] * 10)
+        
+        self.engine.param_grid = {'C': [0.1, 1.0]}
+        dummy_inner_cv = [(np.arange(10), np.arange(10, 20))]
+        
+        best_c, best_model = self.engine.train(X_train, y_train, inner_cv_iterator=dummy_inner_cv)
+        self.assertIn(best_c, [0.1, 1.0])
+        self.assertIsInstance(best_model, SVC)
 
     def test_execute_nested_cv_integration(self):
         """Integration Test: Ensures the decoupled Double CV pipeline executes end-to-end."""
@@ -106,15 +117,22 @@ class TestSVMEngine(unittest.TestCase):
             X_data = np.random.randn(N_SAMPLES, N_FEATURES)
             y_data = np.array([0] * (N_SAMPLES // 2) + [1] * (N_SAMPLES // 2))
             np.random.shuffle(y_data)
+            X_data[y_data == 1] += 0.5
             
-            X_data[y_data == 1] += 0.5 
             self.engine.param_grid = {'C': [0.1, 1.0]}
             
-            df_metrics, artifacts = self.engine.execute_nested_cv(X_data, y_data, subjects)
+            dummy_cv_splits = [{
+                'fold': 1,
+                'outer_train_idx': np.arange(10),
+                'outer_test_idx': np.arange(10, 20),
+                'inner_splits_relative': [(np.arange(8), np.arange(8, 10))]
+            }]
+            
+            df_metrics, artifacts = self.engine.execute_nested_cv(X_data, y_data, subjects, cv_splits=dummy_cv_splits)
             
             self.assertIsInstance(df_metrics, pd.DataFrame)
-            self.assertEqual(len(df_metrics), 2)
-            self.assertEqual(len(artifacts), 2)
+            self.assertEqual(len(df_metrics), 1)
+            self.assertEqual(len(artifacts), 1)
 
 if __name__ == '__main__':
     unittest.main()
