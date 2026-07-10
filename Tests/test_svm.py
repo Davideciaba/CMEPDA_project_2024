@@ -43,15 +43,24 @@ class TestSVMEngine(unittest.TestCase):
     def test_train_method(self):
         """Ensures the decoupled training API correctly performs Grid Search and fitting."""
         X_train = np.random.randn(20, 10)
-        y_train = np.array([0, 1] * 10)   
         
+        # Manteniamo la tua logica originale: primi 10 a '0', successivi 10 a '1'
+        y_train = np.array([0] * 10 + [1] * 10)
+    
         self.engine.param_grid = {'C': [0.1, 1.0]}
-        dummy_inner_cv = [(np.arange(10), np.arange(10, 20))]
         
+        # FIX: Creiamo indici di split bilanciati per evitare l'errore "1 class" di Scikit-Learn.
+        # Training Set (10 campioni): metà dalla prima classe (indici 0-4), metà dalla seconda (indici 10-14)
+        train_indices = np.array([0, 1, 2, 3, 4, 10, 11, 12, 13, 14])
+        # Test Set (10 campioni): i restanti indici
+        test_indices = np.array([5, 6, 7, 8, 9, 15, 16, 17, 18, 19])
+        
+        dummy_inner_cv = [(train_indices, test_indices)]
+    
         best_c, best_model = self.engine.train(X_train, y_train, inner_cv_iterator=dummy_inner_cv)
+        
         self.assertIn(best_c, [0.1, 1.0])
         self.assertIsInstance(best_model, SVC)
-
     def test_predict_method(self):
         """Validates the pure inference API structure and array returns."""
         mock_model = MagicMock(spec=SVC)
