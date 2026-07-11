@@ -25,21 +25,7 @@ from sklearn.metrics import (
     roc_curve
 )
 from Python.utils.py_logger import CustomLogger
-from sklearn.base import BaseEstimator, TransformerMixin
 
-class DtypeDebugger(BaseEstimator, TransformerMixin):
-    """
-    Custom Passthrough Transformer for debugging Scikit-Learn Pipelines.
-    Intercepts the array passing through the pipeline, prints its memory footprint/dtype, 
-    and passes it unchanged to the next step.
-    """
-    def fit(self, X, y=None):
-        return self
-
-    def transform(self, X, y=None):
-        # Print the exact dtype and shape during the GridSearch execution
-        print(f"\n[DEBUG Pipeline] Array Shape: {X.shape} | Current Dtype: {X.dtype}")
-        return X
 
 class SVMClassifier:
     """
@@ -104,8 +90,7 @@ class SVMClassifier:
             - best_pipeline: The fitted pipeline object
         """
         base_pipeline = Pipeline([
-            ('scaler', StandardScaler(dtype=np.float32)),
-            ('debugger', DtypeDebugger()),
+            ('scaler', StandardScaler()),
             ('svc', SVC(kernel='linear', class_weight='balanced'))
         ])
         

@@ -124,7 +124,7 @@ classdef VBMAnalysis < handle
             end
         end
         
-        function [thresholdedMap, statThreshold] = getCorrectedMap(obj, outputDir, contrastName, pValue, correctionMode)
+        function [thresholdedMap, statThreshold] = getCorrectedMap(obj, outputDir, contrastName, alpha, correctionMode)
             % METHOD: getCorrectedMap
             % PURPOSE: Extracts the corrected continuous T-map and calculates the 
             %       threshold based on FWE/FDR corrections.
@@ -132,11 +132,11 @@ classdef VBMAnalysis < handle
                 obj VBMAnalysis
                 outputDir (1,:) char {mustBeNonempty}
                 contrastName (1, :) char {mustBeNonempty}
-                pValue (1, 1) double {mustBePositive, mustBeLessThan(pValue, 1)}
+                alpha (1, 1) double {mustBePositive, mustBeLessThan(alpha, 1)}
                 correctionMode (1, :) char {mustBeMember(correctionMode, {'FDR', 'FWE', 'none'})}
             end
             
-            obj.PrivateLogger.info('Computing %s correction (p<%.3f) for contrast: %s', correctionMode, pValue, contrastName);
+            obj.PrivateLogger.info('Computing %s correction ($alpha$ = %.3f) for contrast: %s', correctionMode, alpha, contrastName);
             
             % Check if SPM is in path
             if isempty(which('spm'))
@@ -185,17 +185,17 @@ classdef VBMAnalysis < handle
                 end
                 % Vm = 0 because no implicit mask needed
                 % n = 1 because only one null hypothesis to test
-                statThreshold = spm_uc_FDR(pValue, degreesOfFreedom, statDistributionType, 1, volHeader, 0);
+                statThreshold = spm_uc_FDR(alpha, degreesOfFreedom, statDistributionType, 1, volHeader, 0);
             
             % Family-Wise Error Correction
             elseif strcmpi(correctionMode, 'FWE')
                 % SPM.xVol.R = resolution element counts
                 % SPM.xVol.S = Mask voxel count
-                statThreshold = spm_uc(pValue, degreesOfFreedom, statDistributionType, SPM.xVol.R, 1, SPM.xVol.S);
+                statThreshold = spm_uc(alpha, degreesOfFreedom, statDistributionType, SPM.xVol.R, 1, SPM.xVol.S);
             
             % Uncorrected
             else 
-                statThreshold = spm_u(pValue, degreesOfFreedom, statDistributionType);
+                statThreshold = spm_u(alpha, degreesOfFreedom, statDistributionType);
             end
             
             % Load t-map volume 
@@ -216,13 +216,13 @@ classdef VBMAnalysis < handle
             
             % Warning if the threshold killed all significance
             if max(thresholdedMap(:)) == 0
-                obj.PrivateLogger.warning('Zero voxels survived the %s threshold (p=%.3f). Map is completely empty.', correctionMode, pValue);
+                obj.PrivateLogger.warning('Zero voxels survived the %s threshold (alpha=%.3f). Map is completely empty.', correctionMode, alpha);
             end
 
             obj.PrivateLogger.success('Statistical threshold computed successfully: T > %.3f', statThreshold);
         end
 
-        function metrics = evaluateMapSimilarity(obj, mapA, mapB, nameA, nameB)
+        function evaluateMapSimilarity(obj, mapA, mapB, nameA, nameB)
             % METHOD: evaluateMapSimilarity
             % PURPOSE: Calculates Dice, Jaccard, and Inclusion ratios for two thresholded 3D 
             %   statistical maps. Also computes the Pearson correlation of the t-values 
@@ -254,15 +254,14 @@ classdef VBMAnalysis < handle
             % Prevent NaN if both maps are completely empty
             if unionVol == 0
                 obj.PrivateLogger.warning('Both maps are entirely empty. Similarity metrics are undefined.');
-                metrics.Dice = 0; metrics.Jaccard = 0; metrics.InclusionA_in_B = 0; metrics.InclusionB_in_A = 0; metrics.IntensityCorr = NaN;
                 return;
             end
             
             % Calculate spatial metrics
-            metrics.Dice = (2 * intersection) / (volA + volB);
-            metrics.Jaccard = intersection / unionVol;
-            if volA > 0, metrics.InclusionA_in_B = intersection / volA; else, metrics.InclusionA_in_B = 0; end
-            if volB > 0, metrics.InclusionB_in_A = intersection / volB; else, metrics.InclusionB_in_A = 0; end
+            dice = (2 * intersection) / (volA + volB);
+            jaccard = intersection / unionVol;
+            if volA > 0, inclusionA_in_B = intersection / volA; else, inclusionA_in_B = 0; end
+            if volB > 0, inclusionB_in_A = intersection / volB; else, inclusionB_in_A = 0; end
             
             % Calculate Pearson correlation
             if intersection > 3  % to avoid non-significant results
@@ -270,18 +269,18 @@ classdef VBMAnalysis < handle
                 tValsA = mapA(maskA & maskB); 
                 tValsB = mapB(maskA & maskB);
                 % Do the areas of atrophy scale in the same way? 
-                metrics.IntensityCorr = corr(tValsA, tValsB, 'Type', 'Pearson');
+                intensityCorr = corr(tValsA, tValsB, 'Type', 'Pearson');
             else
-                metrics.IntensityCorr = NaN; % Not enough points for valid correlation
+                intensityCorr = NaN; % Not enough points for valid correlation
             end
             
             obj.PrivateLogger.info('Similarity [%s] vs [%s]', nameA, nameB);
             obj.PrivateLogger.info('Active Voxels: %s = %d | %s = %d | Intersection: %d voxels',...
                     nameA, volA, nameB, volB, intersection);
-            obj.PrivateLogger.info('Dice: %.4f | Jaccard: %.4f',  metrics.Dice, metrics.Jaccard);
+            obj.PrivateLogger.info('Dice: %.4f | Jaccard: %.4f',  dice, jaccard);
             obj.PrivateLogger.info('Inclusion: %.2f%% of %s is inside %s | %.2f%% of %s is inside %s',...
-                    metrics.InclusionA_in_B * 100, nameA, nameB, metrics.InclusionB_in_A * 100, nameB, nameA)
-            obj.PrivateLogger.info('Pearson Corr in intersection: %.4f', metrics.IntensityCorr);
+                    inclusionA_in_B * 100, nameA, nameB, inclusionB_in_A * 100, nameB, nameA)
+            obj.PrivateLogger.info('Pearson Corr in intersection: %.4f', intensityCorr);
         end
     end
 end

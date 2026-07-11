@@ -62,9 +62,9 @@ class TestSVMAnalyticalXAI(unittest.TestCase):
             )
             self.assertEqual(z_map.shape[0], N_FEATURES)
 
-    @patch('Python.XAI.XAI_SVM.os.path.exists')
-    @patch('Python.XAI.XAI_SVM.nib.load')
-    @patch('Python.XAI.XAI_SVM.nib.save')
+    @patch('os.path.exists')
+    @patch('nibabel.load')
+    @patch('nibabel.save')
     def test_reconstruct_nifti_success(self, mock_save, mock_load, mock_exists):
         """Validates safe mapping from 1D back into 3D NIfTI."""
         with self.logger.context(Task="NIfTI_Reconstruction"):

@@ -157,21 +157,20 @@ classdef BrainMask < handle
                 obj.MaskType, obj.IntensityThreshold, maxCorr);
         end
         
-        function stats = getMaskStats(obj)
-            % METHOD: getMaskStats
+        function showMaskStats(obj)
+            % METHOD: showMaskStats
             % PURPOSE: Returns volumetric metrics of the instantiated mask.
             arguments
                 obj BrainMask
             end
             
-            stats = struct();
             % Since Matrix is logical, summing it yields the active voxel count
-            stats.ActiveVoxels = sum(obj.Matrix(:)); 
-            stats.TotalVoxels = numel(obj.Matrix);
-            stats.ActivePercentage = (stats.ActiveVoxels / stats.TotalVoxels) * 100;
+            activeVoxels = sum(obj.Matrix(:)); 
+            totalVoxels = numel(obj.Matrix);
+            activePercentage = (activeVoxels / totalVoxels) * 100;
             
             obj.PrivateLogger.info('%s has %d active voxels (%.2f%% of total volume).', ...
-                obj.MaskType, stats.ActiveVoxels, stats.ActivePercentage);
+                obj.MaskType, activeVoxels, activePercentage);
         end
 
         function leakageArray = evaluateLeakage(obj, cohortDataObj, groupSelector)

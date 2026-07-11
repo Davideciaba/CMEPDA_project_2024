@@ -485,6 +485,9 @@ classdef BrainRenderer < handle
 
             % If outPath is empty or '', should only show the figure
             if isempty(outPath) || strlength(outPath) == 0, return; end
+            
+            % Ensure the figure is closed when the function ends
+            cleanupObj = onCleanup(@() close(figHandle));
 
             obj.PrivateLogger.info('Attempting to save figure to: %s', outPath);
             try

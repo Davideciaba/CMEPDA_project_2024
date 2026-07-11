@@ -69,7 +69,7 @@ class CustomLogger:
         )
         self._sinks_config['console'] = sink_id
 
-    def add_file_handler(self, filename: str, level: str = "DEBUG", rotation: Optional[Union[str, int, float]] = "10 KB"):
+    def add_file_handler(self, filename: str, level: str = "DEBUG", rotation: Optional[Union[str, int, float]] = "20 KB"):
         """
         Attaches a file on disk as a log sink with optional rotation.
         """

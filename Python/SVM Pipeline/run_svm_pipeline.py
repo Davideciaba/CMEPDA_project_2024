@@ -110,7 +110,7 @@ def run_svm_pipeline():
 """
     # 2. LOAD DATA
     log.info("STEP 2: Ingesting normalized registry and TPM mask...")
-    C_DICT = {'C':[0.01]}
+    C_DICT = {'C':[0.001, 0.01]}
     svm_engine = SVMClassifier(logger=log, param_grid=C_DICT)
     
     subjects, X_full, y_full = svm_engine.load_real_data(str(registry_csv_path), str(mask_path))
@@ -208,8 +208,8 @@ def run_svm_pipeline():
             svm_weights=raw_weights, 
             C_param=optimal_c, 
             n_support=n_support_total,
-            correction='fdr_by', 
-            alpha=0.1
+            correction='bonferroni', 
+            alpha=0.05
         )
         
         raw_nii = str(results_dir / f"SVM_Raw_Weights_Fold_{fold_id}.nii")
