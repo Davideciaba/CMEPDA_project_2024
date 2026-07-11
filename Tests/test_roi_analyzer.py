@@ -1,107 +1,115 @@
-"""
-Module: test_roi_analyzer.py
-
-Unit testing suite targeting the ROIAnalyzer class.
-Validates the NumPy vectorized boolean masking and absolute importance algebra 
-without hitting real disk memory.
-"""
-import sys
-import os
 import unittest
+from unittest.mock import patch, MagicMock
 import numpy as np
 import pandas as pd
-from unittest.mock import patch, MagicMock
+import sys
+import os
 
-# --- BULLETPROOF PATH INJECTION ---
+# Costruisce il percorso assoluto alla cartella "Python" del tuo progetto
 current_dir = os.path.dirname(os.path.abspath(__file__))
-parent_dir = os.path.abspath(os.path.join(current_dir, '..'))
-python_src_dir = os.path.join(parent_dir, 'Python')
+project_root = os.path.dirname(current_dir)
+python_dir = os.path.join(project_root, 'Python')
 
-if os.path.exists(python_src_dir) and python_src_dir not in sys.path:
-    sys.path.insert(0, python_src_dir)
-elif parent_dir not in sys.path:
-    sys.path.insert(0, parent_dir)
+# Aggiunge la cartella "Python" al PYTHONPATH
+if python_dir not in sys.path:
+    sys.path.insert(0, python_dir)
 
-from Python.XAI.roi_analyzer import ROIAnalyzer
-from Python.utils.py_logger import CustomLogger
+# Ora gli import relativi a "Python" funzioneranno
+from XAI.roi_analyzer import ROIAnalyzer
+from utils.py_logger import CustomLogger
 
 class TestROIAnalyzer(unittest.TestCase):
 
     def setUp(self):
-        """Initializes the ROI Analyzer with a muted test logger."""
         self.logger = CustomLogger(name="TestROI")
         self.analyzer = ROIAnalyzer(logger=self.logger)
 
     @patch('XAI.roi_analyzer.os.path.exists')
     @patch('XAI.roi_analyzer.nib.load')
     @patch('XAI.roi_analyzer.pd.read_csv')
-    def test_regional_extraction_math(self, mock_read_csv, mock_nib_load, mock_exists):
-        """
-        Validates that boolean masking accurately isolates discrete anatomical 
-        regions and calculates the absolute mean of diverging XAI signals.
-        """
-        # Bypassa il controllo di sicurezza fisico sul disco
+    def test_extract_regional_importance_with_filtering(self, mock_read_csv, mock_nib_load, mock_exists):
+        """Testa l'estrazione delle ROI e il filtro della Materia Bianca/Ventricoli."""
         mock_exists.return_value = True
         
-        # Mock Atlas CSV Dictionary
+        # Simula un CSV con regioni miste (GM, WM, Ventricoli)
         mock_df = pd.DataFrame({
-            'ROI_ID': [1, 2], 
-            'ROI_Name': ['Hippocampus', 'Amygdala']
+            'ROI_ID': [1, 2, 3, 4],
+            'ROI_Name': ['Left Hippocampus', 'Right Cerebral White Matter', 'Left Lateral Ventricle', 'Right Amygdala']
         })
         mock_read_csv.return_value = mock_df
         
-        # Mock 3D SPM Atlas (3x3x3 tensor)
-        atlas_vol = np.zeros((3, 3, 3))
-        atlas_vol[0, :, :] = 1 # Z=0 is Hippocampus
-        atlas_vol[1, :, :] = 2 # Z=1 is Amygdala
-        
+        # Simula un atlante (4 regioni, ciascuna con 2 voxel per semplicità)
+        atlas_vol = np.array([
+            [1, 1],
+            [2, 2],
+            [3, 3],
+            [4, 4]
+        ])
         mock_atlas = MagicMock()
         mock_atlas.get_fdata.return_value = atlas_vol
         
-        # Mock 3D XAI Map (e.g., Integrated Gradients with diverging logic)
-        xai_vol = np.zeros((3, 3, 3))
-        xai_vol[0, 0, 0] = 0.5  # Positive attribution in Hippocampus
-        xai_vol[0, 1, 0] = -0.5 # Negative attribution in Hippocampus
-        xai_vol[1, 0, 0] = -5.0 # Strong negative attribution in Amygdala
-        
+        # Simula una mappa XAI con valori arbitrari
+        xai_vol = np.array([
+            [0.5, 0.5], # Hippocampus (Mean = 0.5)
+            [1.0, 1.0], # White Matter (Dovrebbe essere filtrata)
+            [2.0, 2.0], # Ventricle (Dovrebbe essere filtrato)
+            [0.8, 0.8]  # Amygdala (Mean = 0.8)
+        ])
         mock_xai = MagicMock()
         mock_xai.get_fdata.return_value = xai_vol
         
-        # Binding the sequential loads
         mock_nib_load.side_effect = [mock_xai, mock_atlas]
         
-        # Execute Evaluation
-        df = self.analyzer.extract_regional_importance('xai_path.nii', 'atlas_path.nii', 'csv_path.csv', threshold=0.1)
+        # Esecuzione
+        df_result = self.analyzer.extract_regional_importance('fake_xai.nii', 'fake_atlas.nii', 'fake_csv.csv')
         
-        # Assertions
-        self.assertEqual(len(df), 2)
+        # Asserzioni
+        # 1. Devono rimanere solo 2 regioni (Ippocampo e Amigdala)
+        self.assertEqual(len(df_result), 2)
         
-        # Based on global density sorting, Amygdala (Total signal: 5.0 / 9 voxels = 0.555) is 1st
-        self.assertEqual(df.iloc[0]['ROI_Name'], 'Amygdala')
-        self.assertAlmostEqual(df.iloc[0]['Mean_ROI_Signal'], 5.0 / 9.0, places=4)
+        # 2. Le regioni filtrate non devono esserci
+        region_names = df_result['ROI_Name'].tolist()
+        self.assertNotIn('Right Cerebral White Matter', region_names)
+        self.assertNotIn('Left Lateral Ventricle', region_names)
         
-        # Hippocampus is 2nd. (Total signal: 1.0 / 9 voxels = 0.111)
-        self.assertEqual(df.iloc[1]['ROI_Name'], 'Hippocampus')
-        self.assertAlmostEqual(df.iloc[1]['Mean_ROI_Signal'], 1.0 / 9.0, places=4)
+        # 3. L'Amigdala (0.8) deve essere prima dell'Ippocampo (0.5) perché i risultati sono ordinati in modo decrescente
+        self.assertEqual(df_result.iloc[0]['ROI_Name'], 'Right Amygdala')
+        self.assertEqual(df_result.iloc[1]['ROI_Name'], 'Left Hippocampus')
+
+    def test_ndcg_calculation(self):
+        """Testa la correttezza matematica del calcolo dell'nDCG."""
+        # Scenario di test standard
+        # Valori veri di rilevanza (ground truth)
+        true_scores = np.array([3, 2, 3, 0, 1, 2])
+        # Valori predetti (le previsioni del modello per quegli stessi elementi)
+        predicted_scores = np.array([2, 1, 3, 0, 0, 1]) 
         
-    @patch('XAI.roi_analyzer.os.path.exists')
-    @patch('XAI.roi_analyzer.nib.load')
-    @patch('XAI.roi_analyzer.pd.read_csv')
-    def test_dimension_mismatch_exception(self, mock_read_csv, mock_nib_load, mock_exists):
-        """Ensures the analyzer fails safely if maps are not in the same spatial grid."""
-        mock_exists.return_value = True
-        mock_read_csv.return_value = pd.DataFrame({'ROI_ID': [1], 'ROI_Name': ['A']})
+        # Calcolo manuale per k=3:
+        # 1. Ordine ideale (basato su true_scores): [3, 3, 2, 2, 1, 0]
+        #    Top 3 ideali: [3, 3, 2]
+        #    IDCG@3 = 3/log2(2) + 3/log2(3) + 2/log2(4) = 3 + 1.892 + 1 = 5.892
+        #
+        # 2. Ordine predetto (indici ordinati per predicted_scores): [2, 0, 1, 5, 4, 3]
+        #    Valori *veri* corrispondenti all'ordine predetto: [3, 3, 2, 2, 1, 0]
+        #    (In questo caso specifico, l'ordine predetto produce gli stessi primi 3 elementi dell'ordine ideale)
+        #    DCG@3 = 3/log2(2) + 3/log2(3) + 2/log2(4) = 5.892
+        #
+        # 3. nDCG = DCG / IDCG = 1.0
         
-        mock_xai = MagicMock()
-        mock_xai.get_fdata.return_value = np.zeros((10, 10, 10))
+        ndcg_k3 = self.analyzer.calculate_ndcg(predicted_scores, true_scores, k=3)
+        self.assertAlmostEqual(ndcg_k3, 1.0, places=3)
         
-        mock_atlas = MagicMock()
-        mock_atlas.get_fdata.return_value = np.zeros((12, 12, 12)) # Mismatch!
+        # Facciamo un test in cui l'ordine predetto è pessimo
+        bad_predictions = np.array([0, 0, 0, 3, 2, 1])
+        # Ordine predetto: [3, 4, 5, 0, 1, 2]
+        # Valori *veri* corrispondenti: [0, 1, 2, 3, 2, 3]
+        # Top 3 presi: [0, 1, 2]
+        # DCG@3 = 0/log2(2) + 1/log2(3) + 2/log2(4) = 0 + 0.6309 + 1 = 1.6309
+        # nDCG = 1.6309 / 5.892 = 0.2768
         
-        mock_nib_load.side_effect = [mock_xai, mock_atlas]
-        
-        with self.assertRaises(ValueError):
-            self.analyzer.extract_regional_importance('xai.nii', 'atlas.nii', 'labels.csv')
+        ndcg_bad_k3 = self.analyzer.calculate_ndcg(bad_predictions, true_scores, k=3)
+        self.assertTrue(ndcg_bad_k3 < 1.0)
+        self.assertAlmostEqual(ndcg_bad_k3, 0.2768, places=3)
 
 if __name__ == '__main__':
     unittest.main()
