@@ -124,7 +124,7 @@ classdef VBMAnalysis < handle
             end
         end
         
-        function [thresholdedMap, statThreshold] = getCorrectedMap(obj, outputDir, contrastName, alpha, correctionMode)
+        function [thresholdedMap, statThreshold] = getCorrectedMap(obj, outputDir, contrastName, alpha, correctionMode, exportPath)
             % METHOD: getCorrectedMap
             % PURPOSE: Extracts the corrected continuous T-map and calculates the 
             %       threshold based on FWE/FDR corrections.
@@ -134,9 +134,10 @@ classdef VBMAnalysis < handle
                 contrastName (1, :) char {mustBeNonempty}
                 alpha (1, 1) double {mustBePositive, mustBeLessThan(alpha, 1)}
                 correctionMode (1, :) char {mustBeMember(correctionMode, {'FDR', 'FWE', 'none'})}
+                exportPath (1,:) char = ''
             end
             
-            obj.PrivateLogger.info('Computing %s correction ($alpha$ = %.3f) for contrast: %s', correctionMode, alpha, contrastName);
+            obj.PrivateLogger.info('Computing %s correction (alpha = %.3f) for contrast: %s', correctionMode, alpha, contrastName);
             
             % Check if SPM is in path
             if isempty(which('spm'))
@@ -220,6 +221,30 @@ classdef VBMAnalysis < handle
             end
 
             obj.PrivateLogger.success('Statistical threshold computed successfully: T > %.3f', statThreshold);
+        
+            % --- Export to NIfTI if requested ---
+            if ~isempty(exportPath)
+                obj.PrivateLogger.info('Exporting thresholded map to: %s', exportPath);
+                try
+                    % Safely create parent directories
+                    [exportDir, ~, ~] = fileparts(exportPath);
+                    if ~isempty(exportDir) && ~exist(exportDir, 'dir')
+                        mkdir(exportDir);
+                    end
+                    
+                    % Clone and modify native SPM header
+                    outHeader = tHeader;
+                    outHeader.fname = exportPath;
+                    outHeader.descrip = sprintf('SPM VBM %s corrected map (alpha=%.3f)', correctionMode, alpha);
+                    outHeader.dt = [16, 0]; % Single precision
+
+                    spm_write_vol(outHeader, thresholdedMap);
+                    obj.PrivateLogger.success('NIfTI file exported successfully.');
+                catch writeME
+                    obj.PrivateLogger.error('Failed to export map to %s', exportPath);
+                    rethrow(writeME);
+                end
+            end
         end
 
         function evaluateMapSimilarity(obj, mapA, mapB, nameA, nameB)

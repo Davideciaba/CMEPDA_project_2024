@@ -131,7 +131,7 @@ class SVMExplainer:
         reject_null, pvals_corrected, _, _ = multipletests(p_values, alpha=alpha, method=correction)
         
         significant_voxels = np.sum(reject_null)
-        self.logger.info(f"Gaonkar Correction ({correction.upper()}): {significant_voxels}/{d_features} voxels passed significance at p < {alpha}.")
+        self.logger.info(f"Gaonkar Correction ({correction.upper()}): {significant_voxels}/{d_features} voxels passed significance.")
         
         # We suppress all voxels that failed the statistical correction to 0.0
         z_scores_thresholded = np.zeros_like(z_scores)

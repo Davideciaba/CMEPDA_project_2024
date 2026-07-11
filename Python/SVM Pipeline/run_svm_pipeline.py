@@ -211,6 +211,8 @@ def run_svm_pipeline():
             correction='bonferroni', 
             alpha=0.05
         )
+
+        log.info('')
         
         raw_nii = str(results_dir / f"SVM_Raw_Weights_Fold_{fold_id}.nii")
         haufe_nii = str(results_dir / f"SVM_Haufe_Fold_{fold_id}.nii")
@@ -220,8 +222,16 @@ def run_svm_pipeline():
         explainer.reconstruct_and_save_3d(haufe_map, mask_bool, mask_affine, haufe_nii)
         explainer.reconstruct_and_save_3d(gaonkar_z_map_thresholded, mask_bool, mask_affine, gaonkar_nii)
         
-        slice_config = 3.0
+        raw = str(np.all(raw_weights >= 0))
+        log.info(f"raw weights map {fold_id} has only positives values? {raw}")
+        haufe = str(np.all(haufe_map >= 0))
+        log.info(f"Haufe map {fold_id} has only positives values? {haufe}")
+        gaonkar = str(np.all(gaonkar_z_map_thresholded >= 0))
+        log.info(f"Gaonkar map {fold_id} has only positives values? {gaonkar}")
+        p = str(np.all(pvals_corrected >= 0))
+        log.info(f"Gaonkar map {fold_id} has only positives values? {p}")
 
+        slice_config = 3.0
         if bg_path:
             renderer.plot_3d_activation_map(
                 bg_path, raw_nii, str(mask_path), f"Raw Weights (Fold {fold_id})", 

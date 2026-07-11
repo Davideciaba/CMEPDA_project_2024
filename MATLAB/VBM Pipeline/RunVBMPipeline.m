@@ -130,8 +130,9 @@ function RunVBMPipeline()
     % Start two sample t-test on TPM Mask
     vbmModel.twoSampleTTest(vbmDir, myCohort, tpmMaskPath, 'AD', 'CTRL');
 
-    % Extract the corrected map based on TPM Mask (Family-Wise Error at alpha = 0.05)
-    [tpmFweMap, tpmThresh] = vbmModel.getCorrectedMap(vbmDir, contrastName, alpha, correctionMode);
+    % Extract and export the corrected map based on TPM Mask (Family-Wise Error at alpha = 0.05)
+    tpmFweMapPath = fullfile(resultsDir, 'Thresholded Maps', 'TPM_Mask_FWE_corrected_map.nii');
+    [tpmFweMap, tpmThresh] = vbmModel.getCorrectedMap(vbmDir, contrastName, alpha, correctionMode, tpmFweMapPath);
 
     %% 5. Plot statistical results on a background volume (BrainRenderer)
 
