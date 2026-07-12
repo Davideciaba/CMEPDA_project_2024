@@ -38,7 +38,7 @@ class SVMClassifier:
         self.param_grid = param_grid
 
     @staticmethod
-    def load_real_data(csv_path: str, mask_path: str) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+    def load_data(csv_path: str, mask_path: str) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
         """Loads NIfTI volumes, extracts valid voxels via mask, and flattens to 1D."""
         
         df = pd.read_csv(csv_path)
@@ -58,14 +58,14 @@ class SVMClassifier:
             
         return np.array(subjects), np.array(X_list, dtype=np.float32), np.array(y_list)
 
-    def _evaluate_classification(self, y_true: np.ndarray, y_pred: np.ndarray, y_prob: np.ndarray) -> Dict[str, float]:
+    def _evaluate_classification(self, y_true: np.ndarray, y_pred: np.ndarray, y_decision: np.ndarray) -> Dict[str, float]:
         """Computes clinical metrics safely, guarding against mathematical edge-cases."""
         tn, fp, fn, tp = confusion_matrix(y_true, y_pred, labels=[0, 1]).ravel()
         sensitivity = tp / (tp + fn) if (tp + fn) > 0 else 0.0
         specificity = tn / (tn + fp) if (tn + fp) > 0 else 0.0
         
         try:
-            auc_score = roc_auc_score(y_true, y_prob)
+            auc_score = roc_auc_score(y_true, y_decision)
         except ValueError:
             auc_score = float('nan')
 
@@ -78,7 +78,7 @@ class SVMClassifier:
             'AUROC': auc_score
         }
 
-    def train(self, X_train: np.ndarray, y_train: np.ndarray, inner_cv_iterator: List[Tuple[np.ndarray, np.ndarray]]) -> Tuple[float, SVC]:
+    def train(self, X_train: np.ndarray, y_train: np.ndarray, inner_cv_iterator: List[Tuple[np.ndarray, np.ndarray]]) -> Tuple[float, float, float, Any]:
         """
         Unified Training API.
         Executes the Inner Loop tuning to find the optimal 'C' regularization coefficient 

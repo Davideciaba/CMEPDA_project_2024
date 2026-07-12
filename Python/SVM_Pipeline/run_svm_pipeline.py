@@ -113,7 +113,7 @@ def run_svm_pipeline():
     C_DICT = {'C':[1e-4, 1e-3]}
     svm_engine = SVMClassifier(logger=log, param_grid=C_DICT)
     
-    subjects, X_full, y_full = svm_engine.load_real_data(str(registry_csv_path), str(mask_path))
+    subjects, X_full, y_full = svm_engine.load_data(str(registry_csv_path), str(mask_path))
     log.success(f"Data Loaded: {X_full.shape[0]} subjects ready.")
 
     # 3. LOAD & VALIDATE SSOT
