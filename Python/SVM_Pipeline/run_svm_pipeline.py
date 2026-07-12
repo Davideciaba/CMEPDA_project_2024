@@ -52,11 +52,11 @@ def run_svm_pipeline():
     PROJECT_DIR = CURRENT_DIR.parent.parent
     PREPROCESS_DIR = PROJECT_DIR / "MATLAB" / "utils"
     SPM_DIR = pathlib.Path("C:/Users/utente/Desktop/spm")
-    SETUP_DIR = PROJECT_DIR / "Python" / "Common Setup"
+    SETUP_DIR = PROJECT_DIR / "Python" / "Common_Setup"
 
     log = CustomLogger(name="SVMPipeline")
     log.add_console_handler(level="DEBUG", use_colors=True)
-    log_dir = CURRENT_DIR / "Log Files"
+    log_dir = CURRENT_DIR / "Log_Files"
     log_path = log_dir / "SVMPipeline.log"
     log.add_file_handler(log_path, level="DEBUG")
     log.info("--- Booting Decoupled SVM Engine ---")
@@ -110,7 +110,7 @@ def run_svm_pipeline():
 """
     # 2. LOAD DATA
     log.info("STEP 2: Ingesting normalized registry and TPM mask...")
-    C_DICT = {'C':[0.001, 0.01]}
+    C_DICT = {'C':[1e-4, 1e-3]}
     svm_engine = SVMClassifier(logger=log, param_grid=C_DICT)
     
     subjects, X_full, y_full = svm_engine.load_real_data(str(registry_csv_path), str(mask_path))
@@ -201,8 +201,15 @@ def run_svm_pipeline():
         decision_scores = trained_pipeline.decision_function(X_train_fold)
         n_support_total = int(np.sum(trained_pipeline.named_steps['svc'].n_support_))
         
+        raw_weights_top1 = np.where(np.abs(raw_weights) >= np.percentile(np.abs(raw_weights), 99), raw_weights, 0)
+        raw_weights_top5 = np.where(np.abs(raw_weights) >= np.percentile(np.abs(raw_weights), 95), raw_weights, 0)
+
         haufe_map = explainer.compute_haufe_patterns(X_train_scaled, decision_scores)
-        gaonkar_z_map_thresholded, pvals_corrected = explainer.compute_gaonkar_maps(
+
+        haufe_map_top1 = np.where(np.abs(haufe_map) >= np.percentile(np.abs(haufe_map), 99), haufe_map, 0)
+        haufe_map_top5 = np.where(np.abs(haufe_map) >= np.percentile(np.abs(haufe_map), 95), haufe_map, 0)
+
+        gaonkar_z_map_thresholded_bonf005, _ = explainer.compute_gaonkar_maps(
             X_train=X_train_scaled, 
             y_train=y_train_fold, 
             svm_weights=raw_weights, 
@@ -211,42 +218,62 @@ def run_svm_pipeline():
             correction='bonferroni', 
             alpha=0.05
         )
+        gaonkar_z_map_thresholded_fdr01, _ = explainer.compute_gaonkar_maps(
+            X_train=X_train_scaled, 
+            y_train=y_train_fold, 
+            svm_weights=raw_weights, 
+            C_param=optimal_c, 
+            n_support=n_support_total,
+            correction='fdr_by', 
+            alpha=0.1
+        )
+        
+        raw_nii_top1 = str(results_dir / f"SVM_Raw_Weights_Fold_{fold_id}_Top1.nii")
+        raw_nii_top5 = str(results_dir / f"SVM_Raw_Weights_Fold_{fold_id}_Top5.nii")
+        haufe_nii_top1 = str(results_dir / f"SVM_Haufe_Fold_{fold_id}_Top1.nii")
+        haufe_nii_top5 = str(results_dir / f"SVM_Haufe_Fold_{fold_id}_Top5.nii")
+        gaonkar_nii_bonf005 = str(results_dir / f"SVM_Gaonkar_Fold_{fold_id}_bonf005.nii")
+        gaonkar_nii_fdr01 = str(results_dir / f"SVM_Gaonkar_Fold_{fold_id}_fdr01.nii")
 
-        log.info('')
         
-        raw_nii = str(results_dir / f"SVM_Raw_Weights_Fold_{fold_id}.nii")
-        haufe_nii = str(results_dir / f"SVM_Haufe_Fold_{fold_id}.nii")
-        gaonkar_nii = str(results_dir / f"SVM_Gaonkar_Fold_{fold_id}.nii")
+        explainer.reconstruct_and_save_3d(raw_weights_top1, mask_bool, mask_affine, raw_nii_top1)
+        explainer.reconstruct_and_save_3d(raw_weights_top5, mask_bool, mask_affine, raw_nii_top5)
+        explainer.reconstruct_and_save_3d(haufe_map_top1, mask_bool, mask_affine, haufe_nii_top1)
+        explainer.reconstruct_and_save_3d(haufe_map_top5, mask_bool, mask_affine, haufe_nii_top5)
+        explainer.reconstruct_and_save_3d(gaonkar_z_map_thresholded_bonf005, mask_bool, mask_affine, gaonkar_nii_bonf005)
+        explainer.reconstruct_and_save_3d(gaonkar_z_map_thresholded_fdr01, mask_bool, mask_affine, gaonkar_nii_fdr01)
         
-        explainer.reconstruct_and_save_3d(raw_weights, mask_bool, mask_affine, raw_nii)
-        explainer.reconstruct_and_save_3d(haufe_map, mask_bool, mask_affine, haufe_nii)
-        explainer.reconstruct_and_save_3d(gaonkar_z_map_thresholded, mask_bool, mask_affine, gaonkar_nii)
-        
-        raw = str(np.all(raw_weights >= 0))
-        log.info(f"raw weights map {fold_id} has only positives values? {raw}")
-        haufe = str(np.all(haufe_map >= 0))
-        log.info(f"Haufe map {fold_id} has only positives values? {haufe}")
-        gaonkar = str(np.all(gaonkar_z_map_thresholded >= 0))
-        log.info(f"Gaonkar map {fold_id} has only positives values? {gaonkar}")
-        p = str(np.all(pvals_corrected >= 0))
-        log.info(f"Gaonkar map {fold_id} has only positives values? {p}")
-
         slice_config = 3.0
         if bg_path:
+
             renderer.plot_3d_activation_map(
-                bg_path, raw_nii, str(mask_path), f"Raw Weights (Fold {fold_id})", 
-                f"SVM_RawWeights_Fold_{fold_id}.png", np.percentile(np.abs(raw_weights), 95),
-                slice_config=slice_config
+                bg_path, raw_nii_top1, str(mask_path), f"Raw Weights (Fold {fold_id}) Top 1%", 
+                f"SVM_RawWeights_Fold_{fold_id}_Top1.png", slice_config=slice_config
             )
+
             renderer.plot_3d_activation_map(
-                bg_path, haufe_nii, str(mask_path), f"Haufe Pattern (Fold {fold_id})", 
-                f"SVM_Haufe_Fold_{fold_id}.png", np.percentile(np.abs(haufe_map), 95),
-                slice_config=slice_config
+                bg_path, raw_nii_top5, str(mask_path), f"Raw Weights (Fold {fold_id}) Top 5%", 
+                f"SVM_RawWeights_Fold_{fold_id}_Top5.png", slice_config=slice_config
             )
+
             renderer.plot_3d_activation_map(
-                bg_path, gaonkar_nii, str(mask_path), f"Gaonkar Z-Score (Fold {fold_id})", 
-                f"SVM_Gaonkar_Fold_{fold_id}.png", threshold = 1e-15,  # Use a small threshold to visualize significant voxels
-                slice_config=slice_config
+                bg_path, haufe_nii_top1, str(mask_path), f"Haufe Pattern (Fold {fold_id}) Top 1%", 
+                f"SVM_Haufe_Fold_{fold_id}_Top1.png", slice_config=slice_config
+            )
+
+            renderer.plot_3d_activation_map(
+                bg_path, haufe_nii_top5, str(mask_path), f"Haufe Pattern (Fold {fold_id}) Top 5%", 
+                f"SVM_Haufe_Fold_{fold_id}_Top5.png", slice_config=slice_config
+            )
+
+            renderer.plot_3d_activation_map(
+                bg_path, gaonkar_nii_bonf005, str(mask_path), f"Gaonkar Z-Score (Fold {fold_id}) Bonf 0.05", 
+                f"SVM_Gaonkar_Fold_{fold_id}_bonf005.png", slice_config=slice_config
+            )
+
+            renderer.plot_3d_activation_map(
+                bg_path, gaonkar_nii_fdr01, str(mask_path), f"Gaonkar Z-Score (Fold {fold_id}) FDR 0.1", 
+                f"SVM_Gaonkar_Fold_{fold_id}_fdr01.png", slice_config=slice_config
             )
 
     log.success("--- SVM EXECUTION COMPLETE ---")

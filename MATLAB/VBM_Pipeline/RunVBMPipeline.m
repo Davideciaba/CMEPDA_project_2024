@@ -34,7 +34,7 @@ function RunVBMPipeline()
     cohortPath = fullfile(projectRoot, 'AD_CTRL');
     plotsDir = fullfile(scriptPath, 'Plots');
     resultsDir = fullfile(scriptPath, 'Results');
-    logDir = fullfile(scriptPath, 'Log Files');
+    logDir = fullfile(scriptPath, 'Log_Files');
     logPath = fullfile(logDir, 'VBMPipeline.log');
     csvFileName = 'covariateADCTRLsexAgeTIV.csv';
     SPM_DIR = 'C:/Users/utente/Desktop/spm';

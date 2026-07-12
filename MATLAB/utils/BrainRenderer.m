@@ -422,8 +422,11 @@ classdef BrainRenderer < handle
                 % Pad the viewing box by 1 step before and after the active region
                 mniMin = mniMin - stepMm;
                 mniMax = mniMax + stepMm;
-                    
-                mniArray = mniMin : stepMm : mniMax;
+                
+                % Fix the min to a multiple of the step (relative to Z=0)
+                alignedMin = floor(mniMin / stepMm) * stepMm;
+
+                mniArray = alignedMin : stepMm : (mniMax + stepMm * 0.1);
                 
             elseif numel(sliceConfig) == 3
                 % MODE 2: MANUAL BOUNDS [start_mm, step_mm, stop_mm]
@@ -445,6 +448,7 @@ classdef BrainRenderer < handle
                 mniArray = sliceConfig;
             end
             
+
             % Convert the generated MNI coordinates back into matrix voxel indices
             if ~isempty(mniArray)
                 numMniSlices = length(mniArray);
@@ -455,6 +459,9 @@ classdef BrainRenderer < handle
                 
                 voxCoordsMat = affineMat  \ mniSlicesMat;
                 zSlicesVoxel = round(voxCoordsMat(3, :));
+            else
+                obj.PrivateLogger.error('No valid MNI cordinates found for the slice configuration delivered. Aborting rendering.');
+                error('BrainRenderer:NoValidSlices', 'No valid MNI coordinates found.');
             end
             
             % Remove any indices outside the physical matrix volume

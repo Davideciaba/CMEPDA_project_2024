@@ -111,72 +111,111 @@ class ModelRenderer:
         finally:
             plt.close(fig)  # Free RAM
 
-    def _get_voxel_indices_from_mni(self, affine_mat: np.ndarray, slice_config: Any, max_idx: int, active_mask: np.ndarray) -> Tuple[List[int], List[float]]:
+    def _get_voxel_indices_from_mni(self, affine_mat: np.ndarray, slice_config: Any, tensor_size: Tuple[int, int, int], active_mask: np.ndarray) -> Tuple[List[int], List[float]]:
         """
         Translates a configuration (scalar, [start, step, stop], or explicit list)
         into valid physical Z-axis array coordinates. Matches BrainRenderer.m exactly.
         """
         # Extract Affine parameters strictly for Z-axis (Index 2 in Python)
-        translation = affine_mat[2, 3]
-        scale = affine_mat[2, 2]
+        vox_center_xy = [round(tensor_size[0] / 2), round(tensor_size[1] / 2)]
+        max_z = tensor_size[2] - 1
 
         # Resolve Target MNI Coordinates via Duck Typing
         if isinstance(slice_config, (int, float)):
-            step = float(slice_config)
+            step_mm = float(slice_config)
             
             # Find active bounding box along Z-axis (Compress X and Y)
             active_slices = np.any(active_mask, axis=(0, 1))
-            active_idx = np.where(active_slices)[0]
+            active_idx = np.where(active_slices > 0)[0]
             
             if len(active_idx) == 0:
                 self.logger.warning("No active voxels found in the mask.")
                 return [], []
-                
-            start_idx = active_idx[0]
-            stop_idx = active_idx[-1]
+
+            # Matrix multiplication to extract exact MNI boundaries
+            vox_bounds = np.array([
+                [vox_center_xy[0], vox_center_xy[0]],
+                [vox_center_xy[1], vox_center_xy[1]],
+                [active_idx[0], active_idx[-1]],
+                [1, 1]
+            ])
+
+            mni_bounds = affine_mat @ vox_bounds
+            mni_min = np.min(mni_bounds[2, :])
+            mni_max = np.max(mni_bounds[2, :])
             
-            # Convert to MNI
-            start_mni = scale * start_idx + translation
-            stop_mni = scale * stop_idx + translation
+            # Pad the viewing box by 1 step before and after the active region
+            mni_min -= step_mm
+            mni_max += step_mm
+
+            # Fix the min to a multiple of the step (relative to Z=0)
+            aligned_min = np.floor(mni_min / step_mm) * step_mm
             
             # Generate range accounting for affine scaling direction
-            if start_mni < stop_mni:
-                target_mnis = list(np.arange(start_mni, stop_mni, step))
+            if mni_min < mni_max:
+                mni_array = np.arange(aligned_min, mni_max + (step_mm * 0.1), step_mm)
             else:
-                target_mnis = list(np.arange(start_mni, stop_mni -step))
-                
-            # Guarantee the absolute last slice is included (like MATLAB)
-            if not np.isclose(target_mnis[-1], stop_mni, atol=1e-3):
-                target_mnis.append(stop_mni)
+                # Fallback if step should be negative
+                mni_array = np.arange(aligned_min, mni_max - (step_mm * 0.1), -step_mm)
 
         elif isinstance(slice_config, list) and len(slice_config) == 3:
             # Interpreted securely as MATLAB's [start : step : stop]
-            start, step, stop = slice_config
-            target_mnis = np.arange(start, stop, step).tolist()
+            start_mm, step_mm, stop_mm = slice_config
+
+            if (start_mm < stop_mm and step_mm < 0) or (start_mm > stop_mm and step_mm > 0):
+                step_mm = -step_mm
+
+            mni_array = np.arange(start_mm, stop_mm + (step_mm * 0.1), step_mm)
+            
         elif isinstance(slice_config, (list, tuple, np.ndarray)):
             # Interpreted as specific discrete slices
-            target_mnis = [float(x) for x in slice_config]
+            mni_array = np.array([float(x) for x in slice_config])
         else:
             self.logger.error("Invalid slice_config format provided.")
             raise ValueError("slice_config must be a scalar, [start, step, stop], or a list of MNI coordinates.")
 
+        if len(mni_array) == 0:
+            return [], []
         
-        
-        valid_voxels = []
-        valid_mnis = []
-        
-        # 3. Project to Voxel space and apply boundary enforcement
-        for mni in target_mnis:
-            vox_idx = int(round((mni - translation) / scale))
-            if 0 <= vox_idx <= max_idx:
-                valid_voxels.append(vox_idx)
-                valid_mnis.append(mni)
+        # Convert MNI coordinates back into matrix voxel indices
+        num_mni = len(mni_array)
+        mni_slices_mat = np.array([
+            np.zeros(num_mni),
+            np.zeros(num_mni),
+            mni_array,
+            np.ones(num_mni)
+        ])
+
+        # np.linalg.solve is equivalent to MATLAB's "\"
+        vox_coords_mat = np.linalg.solve(affine_mat, mni_slices_mat)
+        z_slices_voxel = np.round(vox_coords_mat[2, :]).astype(int)
                 
-        return valid_voxels, valid_mnis
+        # Remove any indices outside the physical matrix volume
+        valid_logical = (z_slices_voxel >= 0) & (z_slices_voxel <= max_z)
+        
+        z_slices_voxel = np.unique(z_slices_voxel[valid_logical])
+        
+        # Recalculate the physical MNI dimension for the validated and sorted voxels
+        num_slices = len(z_slices_voxel)
+        if num_slices == 0:
+            self.logger.error("No valid voxel indices found after MNI to voxel conversion.")
+            return [], []
+            
+        true_slices_mat = np.array([
+            np.full(num_slices, vox_center_xy[0]),
+            np.full(num_slices, vox_center_xy[1]),
+            z_slices_voxel,
+            np.ones(num_slices)
+        ])
+        
+        true_mni_coords = affine_mat @ true_slices_mat
+        z_mm_array = true_mni_coords[2, :]
+                
+        return z_slices_voxel.tolist(), z_mm_array.tolist()
 
     def plot_3d_activation_map(self, bg_nifti_path: str, stats_nifti_path: str, mask_nifti_path: str,
-                               map_title: str, export_filename: str, threshold: float = 0.0,
-                               slice_config: Any = [-30.5, 3.0, 60.5]) -> None:
+                               map_title: str, export_filename: str, threshold: float = 1e-15,
+                               slice_config: Any = [-33.0, 3.0, 6.0]) -> None:
         """
         Python replication of MATLAB's BrainRenderer.plotStatisticalOverlay.
         Extracts 2D Axial slices surgically and overlays hot colormaps natively.
@@ -193,17 +232,15 @@ class ModelRenderer:
         except IOError as e:
             self.logger.error(f"Failed to load NIfTI volumes for rendering: {e}")
             raise
-
-        # Z-axis boundary constraint
-        max_idx = bg_data.shape[2] -1
+        
+        active_stat_mask = (np.abs(stats_data) >= threshold) & mask_data
         
         # Translate MNI to Voxels
-        vox_indices, valid_mnis = self._get_voxel_indices_from_mni(affine, slice_config, max_idx, mask_data)
+        vox_indices, valid_mnis = self._get_voxel_indices_from_mni(affine, slice_config, stats_data.shape, active_stat_mask)
         
         if not vox_indices:
             self.logger.error(f"No valid brain slices found for config: {slice_config}. Bypassing render.")
             return
-            #raise ValueError("No valid slices found for the provided MNI configuration.")
             
         self.logger.debug(f"Rendering {map_title} | Z-Axis Computed Slices: {len(vox_indices)}")
             
@@ -220,7 +257,7 @@ class ModelRenderer:
         if vmax == 0: vmax = 1.0
         if vmax <= threshold:
             self.logger.warning(f"No voxels exceed the threshold ({threshold}). Aborting.")
-            # raise ValueError("No voxels exceed the threshold.")
+            return
             
         norm = Normalize(vmin=-vmax, vmax=vmax, clip=True)
         cmap = plt.cm.coolwarm

@@ -6,8 +6,8 @@ function PreprocessSVM()
     
     scriptDir = fileparts(mfilename('fullpath'));
     projectRoot = fileparts(fileparts(scriptDir));
-    SVMDir = fullfile(projectRoot, 'Python', 'SVM Pipeline');
-    logDir = fullfile(SVMDir, 'Log Files');
+    SVMDir = fullfile(projectRoot, 'Python', 'SVM_Pipeline');
+    logDir = fullfile(SVMDir, 'Log_Files');
     logPath = fullfile(logDir, 'PreprocessSVM.log');
     spmDir = 'C:\Users\utente\Desktop\spm';
     tpmPath = fullfile(spmDir, 'tpm', 'TPM.nii');

@@ -1,0 +1,16 @@
+2026-07-12 19:16:08.432 | SUCCESS  | PreprocessSVM:PreprocessSVM:46 - File logging successfully initialized at: C:\Users\utente\Desktop\Computing Methods\CMEPDA_project_2024\Python\SVM_Pipeline\Log_Files\PreprocessSVM.log
+2026-07-12 19:16:08.474 | INFO     | PreprocessSVM:PreprocessSVM:52 - --- Starting SVM Preprocessing Pipeline ---
+2026-07-12 19:16:08.489 | INFO     | PreprocessSVM:PreprocessSVM:55 - Scanning Cohort data from C:\Users\utente\Desktop\Computing Methods\CMEPDA_project_2024\AD_CTRL
+2026-07-12 19:16:08.768 | INFO     | CohortData:CohortData.scanDirectory:47 - Recursive scan for covariateADCTRLsexAgeTIV.csv in C:\Users\utente\Desktop\Computing Methods\CMEPDA_project_2024\AD_CTRL
+2026-07-12 19:16:08.793 | SUCCESS  | CohortData:CohortData.scanDirectory:62 - Found clinical covariates file covariateADCTRLsexAgeTIV.csv
+2026-07-12 19:16:08.805 | INFO     | CohortData:CohortData.scanDirectory:64 - Recursive scan for NIfTI volumes in C:\Users\utente\Desktop\Computing Methods\CMEPDA_project_2024\AD_CTRL
+2026-07-12 19:16:08.867 | SUCCESS  | CohortData:CohortData.scanDirectory:88 - Scan complete. Found: 144 AD | 189 CTRL | Total: 333
+2026-07-12 19:16:10.790 | SUCCESS  | CohortData:CohortData.getReferenceInfo:145 - Reference spatial metadata successfully extracted.
+2026-07-12 19:16:10.807 | INFO     | PreprocessSVM:PreprocessSVM:68 - Computing TPM Mask (Grey Matter threshold = 0.01)...
+2026-07-12 19:16:10.851 | INFO     | BrainMask:BrainMask.loadTpmVolume:254 - Attempting to load SPM Tissue Probability Map (TPM) from: C:\Users\utente\Desktop\spm\tpm\TPM.nii
+2026-07-12 19:16:10.942 | INFO     | BrainMask:BrainMask.loadTpmVolume:259 - Detected a 4D NIfTI file with 6 volumes. Forcing extraction of Volume 1 (Gray Matter).
+2026-07-12 19:16:11.279 | SUCCESS  | BrainMask:BrainMask.computeTpmMask:105 - TPM Mask computed successfully (Threshold: 0.010)
+2026-07-12 19:16:11.289 | INFO     | PreprocessSVM:PreprocessSVM:76 - Exporting computed mask to disk...
+2026-07-12 19:16:11.299 | INFO     | BrainMask:BrainMask.exportToNifti:213 - Attempting to export TPM Mask to: C:\Users\utente\Desktop\Computing Methods\CMEPDA_project_2024\Python\SVM_Pipeline\Results\tpm_mask.nii
+2026-07-12 19:16:11.470 | SUCCESS  | BrainMask:BrainMask.exportToNifti:235 - Missing folder automatically created. NIfTI exported successfully.
+2026-07-12 19:16:11.482 | SUCCESS  | PreprocessSVM:PreprocessSVM:81 - SVM Preprocessing complete. Mask safely saved at: C:\Users\utente\Desktop\Computing Methods\CMEPDA_project_2024\Python\SVM_Pipeline\Results\tpm_mask.nii

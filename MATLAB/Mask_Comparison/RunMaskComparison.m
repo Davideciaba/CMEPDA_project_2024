@@ -49,7 +49,7 @@ function RunMaskComparison()
         cohortPath = fullfile(projectRoot, 'AD_CTRL');
         plotsDir = fullfile(scriptPath, 'Plots');
         resultsDir = fullfile(scriptPath, 'Results');
-        logDir = fullfile(scriptPath, 'Log Files');
+        logDir = fullfile(scriptPath, 'Log_Files');
         logPath = fullfile(logDir, 'maskComparison.log');
         csvFileName = 'covariateADCTRLsexAgeTIV.csv';
         tpmPath = fullfile(fileparts(which('spm')), 'tpm', 'TPM.nii');

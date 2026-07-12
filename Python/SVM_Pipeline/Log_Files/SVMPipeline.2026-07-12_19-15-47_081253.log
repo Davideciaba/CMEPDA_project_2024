@@ -1,0 +1,131 @@
+2026-07-12 19:15:47.081 | INFO     | run_svm_pipeline.py:run_svm_pipeline:62 - --- Booting Decoupled SVM Engine ---
+2026-07-12 19:15:47.081 | INFO     | matlab_orchestrator.py:start_engine:91 - Booting up MATLAB Engine (this may take a few seconds)...
+2026-07-12 19:16:04.997 | SUCCESS  | matlab_orchestrator.py:start_engine:94 - MATLAB Engine connected successfully.
+2026-07-12 19:16:05.391 | INFO     | matlab_orchestrator.py:_execute_task_real_time:202 - Initiating Task [PreprocessSVM] in background thread... | Engine = MATLAB | Module = PreprocessSVM
+2026-07-12 19:16:05.391 | INFO     | matlab_orchestrator.py:_execute_task_real_time:203 - Tailing physical log file at: C:\Users\utente\Desktop\Computing Methods\CMEPDA_project_2024\Python\SVM_Pipeline\Log_Files\PreprocessSVM.log | Engine = MATLAB | Module = PreprocessSVM
+2026-07-12 19:16:08.432 | SUCCESS  | PreprocessSVM.m:PreprocessSVM:46 - File logging successfully initialized at: C:\Users\utente\Desktop\Computing Methods\CMEPDA_project_2024\Python\SVM_Pipeline\Log_Files\PreprocessSVM.log | Engine = MATLAB | Module = PreprocessSVM
+2026-07-12 19:16:08.474 | INFO     | PreprocessSVM.m:PreprocessSVM:52 - --- Starting SVM Preprocessing Pipeline --- | Engine = MATLAB | Module = PreprocessSVM
+2026-07-12 19:16:08.489 | INFO     | PreprocessSVM.m:PreprocessSVM:55 - Scanning Cohort data from C:\Users\utente\Desktop\Computing Methods\CMEPDA_project_2024\AD_CTRL | Engine = MATLAB | Module = PreprocessSVM
+2026-07-12 19:16:08.768 | INFO     | CohortData.m:CohortData.scanDirectory:47 - Recursive scan for covariateADCTRLsexAgeTIV.csv in C:\Users\utente\Desktop\Computing Methods\CMEPDA_project_2024\AD_CTRL | Engine = MATLAB | Module = PreprocessSVM
+2026-07-12 19:16:08.793 | SUCCESS  | CohortData.m:CohortData.scanDirectory:62 - Found clinical covariates file covariateADCTRLsexAgeTIV.csv | Engine = MATLAB | Module = PreprocessSVM
+2026-07-12 19:16:08.805 | INFO     | CohortData.m:CohortData.scanDirectory:64 - Recursive scan for NIfTI volumes in C:\Users\utente\Desktop\Computing Methods\CMEPDA_project_2024\AD_CTRL | Engine = MATLAB | Module = PreprocessSVM
+2026-07-12 19:16:08.867 | SUCCESS  | CohortData.m:CohortData.scanDirectory:88 - Scan complete. Found: 144 AD | 189 CTRL | Total: 333 | Engine = MATLAB | Module = PreprocessSVM
+2026-07-12 19:16:10.790 | SUCCESS  | CohortData.m:CohortData.getReferenceInfo:145 - Reference spatial metadata successfully extracted. | Engine = MATLAB | Module = PreprocessSVM
+2026-07-12 19:16:10.807 | INFO     | PreprocessSVM.m:PreprocessSVM:68 - Computing TPM Mask (Grey Matter threshold = 0.01)... | Engine = MATLAB | Module = PreprocessSVM
+2026-07-12 19:16:10.851 | INFO     | BrainMask.m:BrainMask.loadTpmVolume:254 - Attempting to load SPM Tissue Probability Map (TPM) from: C:\Users\utente\Desktop\spm\tpm\TPM.nii | Engine = MATLAB | Module = PreprocessSVM
+2026-07-12 19:16:10.942 | INFO     | BrainMask.m:BrainMask.loadTpmVolume:259 - Detected a 4D NIfTI file with 6 volumes. Forcing extraction of Volume 1 (Gray Matter). | Engine = MATLAB | Module = PreprocessSVM
+2026-07-12 19:16:11.279 | SUCCESS  | BrainMask.m:BrainMask.computeTpmMask:105 - TPM Mask computed successfully (Threshold: 0.010) | Engine = MATLAB | Module = PreprocessSVM
+2026-07-12 19:16:11.289 | INFO     | PreprocessSVM.m:PreprocessSVM:76 - Exporting computed mask to disk... | Engine = MATLAB | Module = PreprocessSVM
+2026-07-12 19:16:11.299 | INFO     | BrainMask.m:BrainMask.exportToNifti:213 - Attempting to export TPM Mask to: C:\Users\utente\Desktop\Computing Methods\CMEPDA_project_2024\Python\SVM_Pipeline\Results\tpm_mask.nii | Engine = MATLAB | Module = PreprocessSVM
+2026-07-12 19:16:11.470 | SUCCESS  | BrainMask.m:BrainMask.exportToNifti:235 - Missing folder automatically created. NIfTI exported successfully. | Engine = MATLAB | Module = PreprocessSVM
+2026-07-12 19:16:11.482 | SUCCESS  | PreprocessSVM.m:PreprocessSVM:81 - SVM Preprocessing complete. Mask safely saved at: C:\Users\utente\Desktop\Computing Methods\CMEPDA_project_2024\Python\SVM_Pipeline\Results\tpm_mask.nii | Engine = MATLAB | Module = PreprocessSVM
+2026-07-12 19:16:11.514 | SUCCESS  | matlab_orchestrator.py:_execute_task_real_time:259 - Task [PreprocessSVM] executed completely. | Engine = MATLAB | Module = PreprocessSVM
+2026-07-12 19:16:11.514 | INFO     | matlab_orchestrator.py:stop_engine:117 - Shutting down MATLAB Engine...
+2026-07-12 19:16:11.538 | SUCCESS  | matlab_orchestrator.py:stop_engine:125 - MATLAB Engine terminated.
+2026-07-12 19:16:11.538 | INFO     | run_svm_pipeline.py:run_svm_pipeline:112 - STEP 2: Ingesting normalized registry and TPM mask...
+2026-07-12 19:17:28.001 | SUCCESS  | run_svm_pipeline.py:run_svm_pipeline:117 - Data Loaded: 333 subjects ready.
+2026-07-12 19:17:28.001 | INFO     | run_svm_pipeline.py:run_svm_pipeline:120 - STEP 3: Loading Frozen Fold Artifact...
+2026-07-12 19:17:28.001 | SUCCESS  | run_svm_pipeline.py:run_svm_pipeline:134 - Security Signature validated. Fold integrity is 100% guaranteed.
+2026-07-12 19:17:28.001 | INFO     | run_svm_pipeline.py:run_svm_pipeline:137 - STEP 4: Executing SVM Double Cross Validation...
+2026-07-12 19:17:28.001 | INFO     | svm_classifier.py:execute_nested_cv:131 - Starting SVM Nested CV: 5 Outer Folds, 5 Inner Folds.
+2026-07-12 19:17:28.001 | DEBUG    | svm_classifier.py:execute_nested_cv:137 - --- Processing Outer Fold 1/5 ---
+2026-07-12 19:25:29.146 | DEBUG    | svm_classifier.py:execute_nested_cv:137 - --- Processing Outer Fold 2/5 ---
+2026-07-12 19:32:53.886 | DEBUG    | svm_classifier.py:execute_nested_cv:137 - --- Processing Outer Fold 3/5 ---
+2026-07-12 19:40:33.996 | DEBUG    | svm_classifier.py:execute_nested_cv:137 - --- Processing Outer Fold 4/5 ---
+2026-07-12 19:48:16.626 | DEBUG    | svm_classifier.py:execute_nested_cv:137 - --- Processing Outer Fold 5/5 ---
+2026-07-12 19:56:01.281 | INFO     | svm_classifier.py:execute_nested_cv:174 - Nested CV Evaluation Completed.
+2026-07-12 19:56:01.603 | INFO     | run_svm_pipeline.py:run_svm_pipeline:141 - STEP 5: Rendering ROC Curves and Aggregating Metrics...
+2026-07-12 19:56:01.645 | INFO     | model_renderer.py:plot_roc_curves:48 - Rendering Nested CV ROC Curves for Linear SVM...
+2026-07-12 19:56:04.510 | SUCCESS  | model_renderer.py:plot_roc_curves:108 - ROC Curve successfully rendered and saved at: SVM_ROC.png
+2026-07-12 19:56:04.613 | INFO     | run_svm_pipeline.py:run_svm_pipeline:147 - 
+Detailed Results per Fold:
+ Accuracy  Balanced_Accuracy  F1_Score  Sensitivity  Specificity    AUROC  Fold  Optimal_C  Inner_CV_BalAcc_Mean  Inner_CV_BalAcc_Std
+ 0.761194           0.744555  0.692308     0.620690     0.868421 0.850272     1     0.0001              0.808799             0.039913
+ 0.835821           0.834846  0.813559     0.827586     0.842105 0.852087     2     0.0001              0.808583             0.029871
+ 0.820896           0.813521  0.785714     0.758621     0.868421 0.880218     3     0.0001              0.796662             0.022574
+ 0.772727           0.771202  0.745763     0.758621     0.783784 0.859273     4     0.0001              0.795278             0.044541
+ 0.893939           0.889098  0.872727     0.857143     0.921053 0.936090     5     0.0001              0.774847             0.048504
+2026-07-12 19:56:04.638 | INFO     | run_svm_pipeline.py:run_svm_pipeline:165 - 
+Final Aggregated Metrics across 5 Folds:
+     Accuracy Balanced_Accuracy      F1_Score   Sensitivity   Specificity         AUROC Inner_CV_BalAcc
+0.817 ± 0.053     0.811 ± 0.056 0.782 ± 0.068 0.765 ± 0.091 0.857 ± 0.050 0.876 ± 0.036   0.797 ± 0.014
+2026-07-12 19:56:04.683 | SUCCESS  | run_svm_pipeline.py:run_svm_pipeline:171 - Raw Metrics successfully saved to: SVM_CV_Metrics.csv
+2026-07-12 19:56:04.684 | INFO     | run_svm_pipeline.py:run_svm_pipeline:173 - STEP 6: Extracting XAI Spatial Patterns (Raw, Haufe, Gaonkar) PER FOLD...
+2026-07-12 19:56:04.685 | INFO     | run_svm_pipeline.py:run_svm_pipeline:176 - Reading Affine Matrix and Spatial Geometry from TPM Mask header...
+2026-07-12 19:56:04.770 | INFO     | run_svm_pipeline.py:run_svm_pipeline:190 - Processing XAI for Fold 1 (C=0.0001)...
+2026-07-12 19:59:02.414 | INFO     | XAI_SVM.py:compute_haufe_patterns:38 - Computing Haufe Forward Transform (Covariance mapping)...
+2026-07-12 19:59:08.062 | SUCCESS  | XAI_SVM.py:compute_haufe_patterns:47 - Haufe patterns successfully extracted.
+2026-07-12 19:59:08.200 | INFO     | XAI_SVM.py:compute_gaonkar_maps:70 - Computing Gaonkar Analytic Significance Maps for HDLSS regime...
+2026-07-12 19:59:08.215 | DEBUG    | XAI_SVM.py:compute_gaonkar_maps:76 - Gaonkar Sample-to-Feature Ratio (m/d): 0.0004
+2026-07-12 19:59:08.215 | WARNING  | XAI_SVM.py:compute_gaonkar_maps:83 - HDLSS Violation: Support Vectors are only 83.8% of samples (Requires >= 95.0%).
+2026-07-12 19:59:13.860 | INFO     | XAI_SVM.py:compute_gaonkar_maps:130 - Applying BONFERRONI multiple comparisons correction at alpha=0.05...
+2026-07-12 19:59:14.141 | INFO     | XAI_SVM.py:compute_gaonkar_maps:134 - Gaonkar Correction (BONFERRONI): 959/627444 voxels passed significance.
+2026-07-12 19:59:14.438 | INFO     | XAI_SVM.py:compute_gaonkar_maps:70 - Computing Gaonkar Analytic Significance Maps for HDLSS regime...
+2026-07-12 19:59:14.438 | DEBUG    | XAI_SVM.py:compute_gaonkar_maps:76 - Gaonkar Sample-to-Feature Ratio (m/d): 0.0004
+2026-07-12 19:59:14.438 | WARNING  | XAI_SVM.py:compute_gaonkar_maps:83 - HDLSS Violation: Support Vectors are only 83.8% of samples (Requires >= 95.0%).
+2026-07-12 19:59:18.761 | INFO     | XAI_SVM.py:compute_gaonkar_maps:130 - Applying FDR_BY multiple comparisons correction at alpha=0.1...
+2026-07-12 19:59:18.960 | INFO     | XAI_SVM.py:compute_gaonkar_maps:134 - Gaonkar Correction (FDR_BY): 3099/627444 voxels passed significance.
+2026-07-12 19:59:19.201 | INFO     | XAI_SVM.py:reconstruct_and_save_3d:154 - Reconstructing 3D tensor to save at: C:\Users\utente\Desktop\Computing Methods\CMEPDA_project_2024\Python\SVM_Pipeline\Results\SVM_Raw_Weights_Fold_1_Top1.nii
+2026-07-12 19:59:19.710 | SUCCESS  | XAI_SVM.py:reconstruct_and_save_3d:174 - 3D XAI Map cleanly exported to disk.
+2026-07-12 19:59:19.710 | INFO     | XAI_SVM.py:reconstruct_and_save_3d:154 - Reconstructing 3D tensor to save at: C:\Users\utente\Desktop\Computing Methods\CMEPDA_project_2024\Python\SVM_Pipeline\Results\SVM_Raw_Weights_Fold_1_Top5.nii
+2026-07-12 19:59:19.816 | SUCCESS  | XAI_SVM.py:reconstruct_and_save_3d:174 - 3D XAI Map cleanly exported to disk.
+2026-07-12 19:59:19.816 | INFO     | XAI_SVM.py:reconstruct_and_save_3d:154 - Reconstructing 3D tensor to save at: C:\Users\utente\Desktop\Computing Methods\CMEPDA_project_2024\Python\SVM_Pipeline\Results\SVM_Haufe_Fold_1_Top1.nii
+2026-07-12 19:59:19.898 | SUCCESS  | XAI_SVM.py:reconstruct_and_save_3d:174 - 3D XAI Map cleanly exported to disk.
+2026-07-12 19:59:19.902 | INFO     | XAI_SVM.py:reconstruct_and_save_3d:154 - Reconstructing 3D tensor to save at: C:\Users\utente\Desktop\Computing Methods\CMEPDA_project_2024\Python\SVM_Pipeline\Results\SVM_Haufe_Fold_1_Top5.nii
+2026-07-12 19:59:20.036 | SUCCESS  | XAI_SVM.py:reconstruct_and_save_3d:174 - 3D XAI Map cleanly exported to disk.
+2026-07-12 19:59:20.039 | INFO     | XAI_SVM.py:reconstruct_and_save_3d:154 - Reconstructing 3D tensor to save at: C:\Users\utente\Desktop\Computing Methods\CMEPDA_project_2024\Python\SVM_Pipeline\Results\SVM_Gaonkar_Fold_1_bonf005.nii
+2026-07-12 19:59:20.088 | SUCCESS  | XAI_SVM.py:reconstruct_and_save_3d:174 - 3D XAI Map cleanly exported to disk.
+2026-07-12 19:59:20.090 | INFO     | XAI_SVM.py:reconstruct_and_save_3d:154 - Reconstructing 3D tensor to save at: C:\Users\utente\Desktop\Computing Methods\CMEPDA_project_2024\Python\SVM_Pipeline\Results\SVM_Gaonkar_Fold_1_fdr01.nii
+2026-07-12 19:59:20.138 | SUCCESS  | XAI_SVM.py:reconstruct_and_save_3d:174 - 3D XAI Map cleanly exported to disk.
+2026-07-12 19:59:20.329 | DEBUG    | model_renderer.py:plot_3d_activation_map:245 - Rendering Raw Weights (Fold 1) Top 1% | Z-Axis Computed Slices: 53
+2026-07-12 19:59:43.440 | DEBUG    | model_renderer.py:plot_3d_activation_map:245 - Rendering Raw Weights (Fold 1) Top 5% | Z-Axis Computed Slices: 54
+2026-07-12 19:59:48.686 | DEBUG    | model_renderer.py:plot_3d_activation_map:245 - Rendering Haufe Pattern (Fold 1) Top 1% | Z-Axis Computed Slices: 33
+2026-07-12 19:59:51.722 | DEBUG    | model_renderer.py:plot_3d_activation_map:245 - Rendering Haufe Pattern (Fold 1) Top 5% | Z-Axis Computed Slices: 49
+2026-07-12 19:59:55.801 | DEBUG    | model_renderer.py:plot_3d_activation_map:245 - Rendering Gaonkar Z-Score (Fold 1) Bonf 0.05 | Z-Axis Computed Slices: 26
+2026-07-12 19:59:59.385 | DEBUG    | model_renderer.py:plot_3d_activation_map:245 - Rendering Gaonkar Z-Score (Fold 1) FDR 0.1 | Z-Axis Computed Slices: 50
+2026-07-12 20:00:04.639 | INFO     | run_svm_pipeline.py:run_svm_pipeline:190 - Processing XAI for Fold 2 (C=0.0001)...
+2026-07-12 20:01:58.445 | INFO     | XAI_SVM.py:compute_haufe_patterns:38 - Computing Haufe Forward Transform (Covariance mapping)...
+2026-07-12 20:02:02.191 | SUCCESS  | XAI_SVM.py:compute_haufe_patterns:47 - Haufe patterns successfully extracted.
+2026-07-12 20:02:02.354 | INFO     | XAI_SVM.py:compute_gaonkar_maps:70 - Computing Gaonkar Analytic Significance Maps for HDLSS regime...
+2026-07-12 20:02:02.354 | DEBUG    | XAI_SVM.py:compute_gaonkar_maps:76 - Gaonkar Sample-to-Feature Ratio (m/d): 0.0004
+2026-07-12 20:02:02.372 | WARNING  | XAI_SVM.py:compute_gaonkar_maps:83 - HDLSS Violation: Support Vectors are only 84.6% of samples (Requires >= 95.0%).
+2026-07-12 20:02:07.628 | INFO     | XAI_SVM.py:compute_gaonkar_maps:130 - Applying BONFERRONI multiple comparisons correction at alpha=0.05...
+2026-07-12 20:02:07.731 | INFO     | XAI_SVM.py:compute_gaonkar_maps:134 - Gaonkar Correction (BONFERRONI): 593/627444 voxels passed significance.
+2026-07-12 20:02:07.960 | INFO     | XAI_SVM.py:compute_gaonkar_maps:70 - Computing Gaonkar Analytic Significance Maps for HDLSS regime...
+2026-07-12 20:02:07.960 | DEBUG    | XAI_SVM.py:compute_gaonkar_maps:76 - Gaonkar Sample-to-Feature Ratio (m/d): 0.0004
+2026-07-12 20:02:07.960 | WARNING  | XAI_SVM.py:compute_gaonkar_maps:83 - HDLSS Violation: Support Vectors are only 84.6% of samples (Requires >= 95.0%).
+2026-07-12 20:02:12.453 | INFO     | XAI_SVM.py:compute_gaonkar_maps:130 - Applying FDR_BY multiple comparisons correction at alpha=0.1...
+2026-07-12 20:02:12.621 | INFO     | XAI_SVM.py:compute_gaonkar_maps:134 - Gaonkar Correction (FDR_BY): 2969/627444 voxels passed significance.
+2026-07-12 20:02:12.853 | INFO     | XAI_SVM.py:reconstruct_and_save_3d:154 - Reconstructing 3D tensor to save at: C:\Users\utente\Desktop\Computing Methods\CMEPDA_project_2024\Python\SVM_Pipeline\Results\SVM_Raw_Weights_Fold_2_Top1.nii
+2026-07-12 20:02:13.069 | SUCCESS  | XAI_SVM.py:reconstruct_and_save_3d:174 - 3D XAI Map cleanly exported to disk.
+2026-07-12 20:02:13.069 | INFO     | XAI_SVM.py:reconstruct_and_save_3d:154 - Reconstructing 3D tensor to save at: C:\Users\utente\Desktop\Computing Methods\CMEPDA_project_2024\Python\SVM_Pipeline\Results\SVM_Raw_Weights_Fold_2_Top5.nii
+2026-07-12 20:02:13.140 | SUCCESS  | XAI_SVM.py:reconstruct_and_save_3d:174 - 3D XAI Map cleanly exported to disk.
+2026-07-12 20:02:13.143 | INFO     | XAI_SVM.py:reconstruct_and_save_3d:154 - Reconstructing 3D tensor to save at: C:\Users\utente\Desktop\Computing Methods\CMEPDA_project_2024\Python\SVM_Pipeline\Results\SVM_Haufe_Fold_2_Top1.nii
+2026-07-12 20:02:13.199 | SUCCESS  | XAI_SVM.py:reconstruct_and_save_3d:174 - 3D XAI Map cleanly exported to disk.
+2026-07-12 20:02:13.203 | INFO     | XAI_SVM.py:reconstruct_and_save_3d:154 - Reconstructing 3D tensor to save at: C:\Users\utente\Desktop\Computing Methods\CMEPDA_project_2024\Python\SVM_Pipeline\Results\SVM_Haufe_Fold_2_Top5.nii
+2026-07-12 20:02:13.242 | SUCCESS  | XAI_SVM.py:reconstruct_and_save_3d:174 - 3D XAI Map cleanly exported to disk.
+2026-07-12 20:02:13.258 | INFO     | XAI_SVM.py:reconstruct_and_save_3d:154 - Reconstructing 3D tensor to save at: C:\Users\utente\Desktop\Computing Methods\CMEPDA_project_2024\Python\SVM_Pipeline\Results\SVM_Gaonkar_Fold_2_bonf005.nii
+2026-07-12 20:02:13.727 | SUCCESS  | XAI_SVM.py:reconstruct_and_save_3d:174 - 3D XAI Map cleanly exported to disk.
+2026-07-12 20:02:13.727 | INFO     | XAI_SVM.py:reconstruct_and_save_3d:154 - Reconstructing 3D tensor to save at: C:\Users\utente\Desktop\Computing Methods\CMEPDA_project_2024\Python\SVM_Pipeline\Results\SVM_Gaonkar_Fold_2_fdr01.nii
+2026-07-12 20:02:13.773 | SUCCESS  | XAI_SVM.py:reconstruct_and_save_3d:174 - 3D XAI Map cleanly exported to disk.
+2026-07-12 20:02:13.933 | DEBUG    | model_renderer.py:plot_3d_activation_map:245 - Rendering Raw Weights (Fold 2) Top 1% | Z-Axis Computed Slices: 49
+2026-07-12 20:02:20.322 | DEBUG    | model_renderer.py:plot_3d_activation_map:245 - Rendering Raw Weights (Fold 2) Top 5% | Z-Axis Computed Slices: 54
+2026-07-12 20:02:26.126 | DEBUG    | model_renderer.py:plot_3d_activation_map:245 - Rendering Haufe Pattern (Fold 2) Top 1% | Z-Axis Computed Slices: 41
+2026-07-12 20:02:30.194 | DEBUG    | model_renderer.py:plot_3d_activation_map:245 - Rendering Haufe Pattern (Fold 2) Top 5% | Z-Axis Computed Slices: 49
+2026-07-12 20:02:34.846 | DEBUG    | model_renderer.py:plot_3d_activation_map:245 - Rendering Gaonkar Z-Score (Fold 2) Bonf 0.05 | Z-Axis Computed Slices: 39
+2026-07-12 20:02:38.611 | DEBUG    | model_renderer.py:plot_3d_activation_map:245 - Rendering Gaonkar Z-Score (Fold 2) FDR 0.1 | Z-Axis Computed Slices: 47
+2026-07-12 20:02:43.025 | INFO     | run_svm_pipeline.py:run_svm_pipeline:190 - Processing XAI for Fold 3 (C=0.0001)...
+2026-07-12 20:03:54.042 | INFO     | XAI_SVM.py:compute_haufe_patterns:38 - Computing Haufe Forward Transform (Covariance mapping)...
+2026-07-12 20:03:58.465 | SUCCESS  | XAI_SVM.py:compute_haufe_patterns:47 - Haufe patterns successfully extracted.
+2026-07-12 20:03:58.586 | INFO     | XAI_SVM.py:compute_gaonkar_maps:70 - Computing Gaonkar Analytic Significance Maps for HDLSS regime...
+2026-07-12 20:03:58.586 | DEBUG    | XAI_SVM.py:compute_gaonkar_maps:76 - Gaonkar Sample-to-Feature Ratio (m/d): 0.0004
+2026-07-12 20:03:58.603 | WARNING  | XAI_SVM.py:compute_gaonkar_maps:83 - HDLSS Violation: Support Vectors are only 86.1% of samples (Requires >= 95.0%).
+2026-07-12 20:04:04.504 | INFO     | XAI_SVM.py:compute_gaonkar_maps:130 - Applying BONFERRONI multiple comparisons correction at alpha=0.05...
+2026-07-12 20:04:04.628 | INFO     | XAI_SVM.py:compute_gaonkar_maps:134 - Gaonkar Correction (BONFERRONI): 316/627444 voxels passed significance.
+2026-07-12 20:04:04.823 | INFO     | XAI_SVM.py:compute_gaonkar_maps:70 - Computing Gaonkar Analytic Significance Maps for HDLSS regime...
+2026-07-12 20:04:04.823 | DEBUG    | XAI_SVM.py:compute_gaonkar_maps:76 - Gaonkar Sample-to-Feature Ratio (m/d): 0.0004
+2026-07-12 20:04:04.838 | WARNING  | XAI_SVM.py:compute_gaonkar_maps:83 - HDLSS Violation: Support Vectors are only 86.1% of samples (Requires >= 95.0%).
+2026-07-12 20:04:09.196 | INFO     | XAI_SVM.py:compute_gaonkar_maps:130 - Applying FDR_BY multiple comparisons correction at alpha=0.1...
+2026-07-12 20:04:09.365 | INFO     | XAI_SVM.py:compute_gaonkar_maps:134 - Gaonkar Correction (FDR_BY): 2528/627444 voxels passed significance.
+2026-07-12 20:04:09.582 | INFO     | XAI_SVM.py:reconstruct_and_save_3d:154 - Reconstructing 3D tensor to save at: C:\Users\utente\Desktop\Computing Methods\CMEPDA_project_2024\Python\SVM_Pipeline\Results\SVM_Raw_Weights_Fold_3_Top1.nii
+2026-07-12 20:04:09.864 | SUCCESS  | XAI_SVM.py:reconstruct_and_save_3d:174 - 3D XAI Map cleanly exported to disk.
