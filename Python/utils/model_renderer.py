@@ -63,7 +63,6 @@ class ModelRenderer:
             
             fold_auc = auc(fpr, tpr)
             aucs.append(fold_auc)
-            
             ax.plot(fpr, tpr, lw=1.5, alpha=0.3, label=f"Fold {fold_id} (AUC = {fold_auc*100:.1f}%)")
             
         # Plot Mean ROC Curve
@@ -110,6 +109,104 @@ class ModelRenderer:
             self.logger.error(f"Failed to save ROC Curve image: {e}")
         finally:
             plt.close(fig)  # Free RAM
+
+    def plot_inner_cv_losses(self, fold_artifacts: List[Dict[str, Any]], model_name: str, filename: str) -> None:
+        """
+        Plots Train and Validation Loss vs Epoch for the Inner Folds.
+        Groups inner folds belonging to the same Outer Fold into a single subplot.
+        """
+        self.logger.info(f"Rendering Inner CV Learning Curves for {model_name}...")
+        
+        num_outer_folds = len(fold_artifacts)
+        cols = 3
+        rows = math.ceil(num_outer_folds / cols)
+        
+        fig, axes = plt.subplots(rows, cols, figsize=(cols * 5, rows * 4), dpi=300)
+        axes = np.array(axes).flatten() # Flatten in case it's 2D
+        
+        for idx, artifact in enumerate(fold_artifacts):
+            ax = axes[idx]
+            fold_id = artifact['fold_id']
+            inner_history = artifact.get('inner_loss_history', {})
+            
+            if not inner_history:
+                ax.text(0.5, 0.5, 'No Inner History Found', ha='center', va='center')
+                continue
+                
+            # Define colors for inner folds to distinguish them
+            colors = plt.cm.viridis(np.linspace(0, 0.9, len(inner_history)))
+            
+            for inner_idx, (inner_name, hist) in enumerate(inner_history.items()):
+                epochs = range(1, len(hist['train_loss']) + 1)
+                ax.plot(epochs, hist['train_loss'], linestyle='--', color=colors[inner_idx], alpha=0.5, 
+                        label=f'In{inner_idx+1} Train' if idx == 0 else "")
+                ax.plot(epochs, hist['val_loss'], linestyle='-', color=colors[inner_idx], alpha=0.9,
+                        label=f'In{inner_idx+1} Val' if idx == 0 else "")
+            
+            ax.set_title(f"Outer Fold {fold_id}", fontsize=11, fontweight='bold')
+            ax.set_xlabel('Epochs')
+            ax.set_ylabel('Loss (CrossEntropy)')
+            ax.grid(True, linestyle=':', alpha=0.6)
+            
+        # Hide any unused subplots
+        for i in range(num_outer_folds, len(axes)):
+            axes[i].axis('off')
+            
+        fig.suptitle(f'Inner Grid Search Learning Curves - {model_name}', fontsize=16, fontweight='bold')
+        
+        # Add a single legend for the first subplot to avoid clutter
+        if len(inner_history) > 0:
+            axes[0].legend(fontsize=7, loc='upper right', ncol=2)
+
+        out_path = self.output_dir / filename
+        try:
+            fig.tight_layout()
+            fig.subplots_adjust(top=0.90) # Adjust for suptitle
+            fig.savefig(out_path)
+            self.logger.success(f"Inner CV Losses rendered: {out_path.name}")
+        except Exception as e:
+            self.logger.error(f"Failed to save Inner Losses plot: {e}")
+        finally:
+            plt.close(fig)
+
+    def plot_outer_cv_losses(self, fold_artifacts: List[Dict[str, Any]], model_name: str, filename: str) -> None:
+        """
+        Plots Train and Test Loss vs Epoch for every Outer Fold on a single overarching plot.
+        """
+        self.logger.info(f"Rendering Outer CV Learning Curves for {model_name}...")
+        
+        fig, ax = plt.subplots(figsize=(10, 6), dpi=300)
+        colors = plt.cm.tab10(np.linspace(0, 1, len(fold_artifacts)))
+        
+        for idx, artifact in enumerate(fold_artifacts):
+            fold_id = artifact['fold_id']
+            outer_history = artifact.get('outer_loss_history', {})
+            
+            if not outer_history:
+                continue
+                
+            epochs = range(1, len(outer_history['train_loss']) + 1)
+            
+            ax.plot(epochs, outer_history['train_loss'], linestyle='--', color=colors[idx], alpha=0.6,
+                    label=f'Fold {fold_id} Train')
+            ax.plot(epochs, outer_history['test_loss'], linestyle='-', color=colors[idx], linewidth=2, alpha=0.9,
+                    label=f'Fold {fold_id} Test')
+            
+        ax.set_title(f'Final Retraining Learning Curves (Outer CV) - {model_name}', fontsize=14, fontweight='bold')
+        ax.set_xlabel('Epochs', fontsize=12)
+        ax.set_ylabel('Loss', fontsize=12)
+        ax.grid(True, linestyle=':', alpha=0.7)
+        ax.legend(bbox_to_anchor=(1.05, 1), loc='upper left', fontsize=9)
+        
+        out_path = self.output_dir / filename
+        try:
+            fig.tight_layout()
+            fig.savefig(out_path)
+            self.logger.success(f"Outer CV Losses rendered: {out_path.name}")
+        except Exception as e:
+            self.logger.error(f"Failed to save Outer Losses plot: {e}")
+        finally:
+            plt.close(fig)
 
     def _get_voxel_indices_from_mni(self, affine_mat: np.ndarray, slice_config: Any, tensor_size: Tuple[int, int, int], active_mask: np.ndarray) -> Tuple[List[int], List[float]]:
         """

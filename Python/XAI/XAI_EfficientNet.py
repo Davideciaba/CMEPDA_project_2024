@@ -14,13 +14,11 @@ import nibabel as nib
 import torch
 from typing import Tuple, Any, List
 
-# --- STRICT TYPE HINTING ---
-# Importiamo esplicitamente la classe CustomLogger dal modulo utils 
-# per imporla come contratto nell'__init__
+
 from utils.py_logger import CustomLogger
 
 
-class DLExplainableAI:
+class EfficientNetExplainer:
     """
     Explainable AI Engine for PyTorch 3D Convolutional Neural Networks.
     """
@@ -102,18 +100,14 @@ class DLExplainableAI:
         
         return i_grads
 
-    @staticmethod
-    def aggregate_global_maps(maps_list: List[np.ndarray]) -> np.ndarray:
-        """
-        Performs element-wise arithmetic averaging over multiple out-of-fold IG arrays.
-        """
-        if not maps_list:
-            raise ValueError("The list of maps to aggregate cannot be empty.")
-        return np.mean(np.array(maps_list), axis=0)
 
-    def reconstruct_nifti(self, map_3d: np.ndarray, affine: np.ndarray, header: Any, output_path: str) -> None:
+    def reconstruct_nifti(self, map_3d: np.ndarray, affine: np.ndarray, output_path: str) -> None:
         """Saves the fully reconstructed 3D feature map to disk."""
         self.logger.info("Reconstructing 3D volume mapping...")
-        reconstructed_img = nib.Nifti1Image(map_3d.astype(np.float32), affine, header=header)
-        nib.save(reconstructed_img, output_path)
+        try:
+            nifti_img = nib.Nifti1Image(map_3d.astype(np.float32), affine)
+            nib.save(nifti_img, output_path)
+        except Exception as e:
+            self.logger.error(f"Failed to save NIfTI volume: {e}")
+            raise
         self.logger.success(f"IG Map written to disk: {output_path}")
