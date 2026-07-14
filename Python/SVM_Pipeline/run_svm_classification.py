@@ -24,6 +24,7 @@ sys.path.append(str(project_root))
 #import hashlib
 
 # Internal Module Imports
+from Python.utils.spm_loader import load_spm_environment
 from Python.utils.py_logger import CustomLogger
 from Python.utils.matlab_orchestrator import MatlabOrchestrator, MatlabTask
 from Python.utils.cv_manager import CVManager
@@ -51,7 +52,7 @@ def run_svm_classification():
     CURRENT_DIR = pathlib.Path(__file__).parent.resolve()
     PROJECT_DIR = CURRENT_DIR.parent.parent
     PREPROCESS_DIR = PROJECT_DIR / "MATLAB" / "utils"
-    SPM_DIR = pathlib.Path("C:/Users/utente/Desktop/spm")
+    spm_dir = load_spm_environment()
     SETUP_DIR = PROJECT_DIR / "Python" / "Common_Setup"
 
     log = CustomLogger(name="SVMPipeline")
@@ -98,7 +99,7 @@ def run_svm_classification():
     """        
     preproc_task = MatlabTask(script_path=preprocess_path, log_path=preprocess_log_path)
         
-    with MatlabOrchestrator(logger=log, tasks=[preproc_task], include_paths=[SPM_DIR]) as orch:
+    with MatlabOrchestrator(logger=log, tasks=[preproc_task], include_paths=[spm_dir]) as orch:
         orch.run_all()
             
         """with open(hash_record_path, "w", encoding="utf-8") as f:

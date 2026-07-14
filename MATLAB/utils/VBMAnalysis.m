@@ -40,13 +40,8 @@ classdef VBMAnalysis < handle
             end
             
             % Directory management
-            try
+            if ~exist(outputDir, 'dir')
                 mkdir(outputDir);
-            catch ME
-                % Ignore if it already exists; otherwise, throw an exception
-                if ~contains(ME.identifier, 'Exists')
-                    rethrow(ME);
-                end
             end
             
             % Initialize SPM

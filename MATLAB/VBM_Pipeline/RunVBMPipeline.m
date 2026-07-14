@@ -37,39 +37,28 @@ function RunVBMPipeline()
     logDir = fullfile(scriptPath, 'Log_Files');
     logPath = fullfile(logDir, 'VBMPipeline.log');
     csvFileName = 'covariateADCTRLsexAgeTIV.csv';
-    SPM_DIR = 'C:/Users/utente/Desktop/spm';
-    try
-        addpath(SPM_DIR); 
-    catch ME
-        error('%s directory not found. Error: %s', SPM_DIR, ME.message);
-    end
-    tpmPath = fullfile(fileparts(which('spm')), 'tpm', 'TPM.nii');
 
     % Add utils path for utility functions
-    try
-        addpath(utilsPath); 
-    catch ME
-        error('%s directory not found. Error: %s', utilsPath, ME.message);
+    if ~isfolder(utilsPath)
+        error('Directory not found: %s', utilsPath);
+    end
+    addpath(utilsPath);
+
+    spmDir = loadSpmEnvironment();
+    tpmPath = fullfile(spmDir, 'tpm', 'TPM.nii');
+
+    if ~isfile(tpmPath)
+        error('The TPM.nii file is missing from the SPM installation: %s', tpmPath);
     end
 
     % Initialize the logger to track the comparison
     logger = Logger('VBMPipeline');
-    try
-        logger.addConsoleHandler('level', 'DEBUG', 'useColors', true);
-        logger.success('Console logging successfully initialized.')
-    catch ME
-        logger.error('Failed to setup console logging.');
-        rethrow(ME);
-    end
+    logger.addConsoleHandler('level', 'DEBUG', 'useColors', true);
+    logger.success('Console logging successfully initialized.');
 
     % Make the file logging directory
-    try
+    if ~exist(logDir, 'dir')
         mkdir(logDir);
-    catch ME
-        % Ignore if it already exists; otherwise, throw an exception
-        if ~contains(ME.identifier, 'Exists')
-            rethrow(ME);
-        end
     end
 
     % Initialize file logger
@@ -77,8 +66,13 @@ function RunVBMPipeline()
         logger.addFileHandler(char(logPath), 'level', 'DEBUG', 'rotation', 10000);
         logger.success('File logging successfully initialized at: %s', logPath);
     catch ME
-        logger.error('Failed to setup file logging at: %s.\n Falling back to console only.', logPath);
-        rethrow(ME);
+        % Since later modules require write access, we must abort
+        % to prevent delayed crashes
+        logger.critical('I/O ERROR: Cannot write to %s', logPath);
+        logger.critical('Pipeline aborted. Ensure you have write permissions for the project root.');
+        error('RunVBMPipeline:PermissionDenied', ...
+            'Write permission denied for directory: %s. \nError: %s', ...
+            logDir, ME.message);
     end
 
     % Kill the logger when the function exits
