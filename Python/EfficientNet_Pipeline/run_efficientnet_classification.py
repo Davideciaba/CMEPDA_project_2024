@@ -12,27 +12,38 @@ project_root = current_file_path.parents[2]
 sys.path.append(str(project_root))
 
 from Python.utils.py_logger import CustomLogger
+from Python.utils.matlab_orchestrator import MatlabOrchestrator, MatlabTask
 from Python.Models.efficientnet_classifier import EfficientNetClassifier
 from Python.utils.cv_manager import CVManager
 from Python.utils.model_renderer import ModelRenderer
 
-def run_efficientnet_pipeline():
+
+def run_efficientnet_classification():
 
     CURRENT_DIR = pathlib.Path(__file__).parent.resolve()
     PROJECT_DIR = CURRENT_DIR.parent.parent
+    PREPROCESS_DIR = PROJECT_DIR / "MATLAB" / "utils"
+    SPM_DIR = pathlib.Path("C:/Users/utente/Desktop/spm")
     SETUP_DIR = PROJECT_DIR / "Python" / "Common_Setup"
 
-    log = CustomLogger(name="CNNPipeline")
+    log = CustomLogger(name="EfficientNetPipeline")
     log.add_console_handler(level="DEBUG", use_colors=True)
     log_dir = CURRENT_DIR / "Log_Files"
-    log_path = log_dir / "SVMPipeline.log"
+    log_path = log_dir / "EfficientNetPipeline.log"
     log.add_file_handler(log_path, level="DEBUG")
     log.info("--- Booting 3D EfficientNet Engine ---")
     
+    preprocess_path = PREPROCESS_DIR / "CommonPreprocess.m"
+    preprocess_log_path = log_dir / "CommonPreprocess.log"
     registry_csv_path = SETUP_DIR / "python_registry.csv"
     results_dir = CURRENT_DIR / "Results"
     folds_json_path = SETUP_DIR / "cv_folds_registry.json"
     plots_dir = CURRENT_DIR / "Plots"
+
+    preproc_task = MatlabTask(script_path=preprocess_path, log_path=preprocess_log_path)
+        
+    with MatlabOrchestrator(logger=log, tasks=[preproc_task], include_paths=[SPM_DIR]) as orch:
+        orch.run_all()
     
     # 1. LOAD DATA
     log.info("Ingesting normalized registry for MONAI Dicts...")
@@ -94,6 +105,13 @@ def run_efficientnet_pipeline():
     results_df.to_csv(str(csv_out_path), index=False)
     log.success(f"Raw Metrics successfully saved to: {csv_out_path.name}")
 
+    log.info("Saving trained PyTorch models to disk for XAI extraction...")
+    for artifact in artifacts:
+        fold_id = artifact['fold_id']
+        model_out_path = results_dir / f"EfficientNet_Fold_{fold_id}.pth"
+        torch.save(artifact['model_state'], str(model_out_path))
+        log.debug(f"Saved Network Weights: {model_out_path.name}")
+
     log.info("Generating performance visualizations...")
     renderer = ModelRenderer(logger=log, output_dir=str(plots_dir))
     renderer.plot_roc_curves(artifacts, "EfficientNet", "EfficientNet_ROC.png")
@@ -103,4 +121,4 @@ def run_efficientnet_pipeline():
     log.success("--- CNN EXECUTION COMPLETE ---")
 
 if __name__ == "__main__":
-    run_efficientnet_pipeline()
+    run_efficientnet_classification()

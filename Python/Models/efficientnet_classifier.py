@@ -214,9 +214,9 @@ class EfficientNetClassifier:
         return np.array(all_preds), np.array(all_probs)
 
     def execute_nested_cv(self, data_dicts: List[Dict[str, Any]], y: np.ndarray, subjects: np.ndarray, 
-                          cv_splits: List[Dict[str, Any]], batch_size: int = 4, max_epochs: int = 30, 
+                          cv_splits: List[Dict[str, Any]], batch_size: int = 4, max_epochs: int = 50, 
                           use_early_stopping: bool = True, use_swa: bool = True, 
-                          patience: int = 5, min_delta: float = 1e-4, swa_n: int = 5, 
+                          patience: int = 10, min_delta: float = 1e-4, swa_n: int = 5, 
                           num_workers: int = 4) -> Tuple[pd.DataFrame, List[Dict[str, Any]]]:
         """
         Orchestrates Deep Learning CV with Nested Grid Search.

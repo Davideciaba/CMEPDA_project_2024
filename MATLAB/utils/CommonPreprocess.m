@@ -1,4 +1,4 @@
-function PreprocessSVM()
+function CommonPreprocess()
     % PREPROCESSSVM MATLAB Pipeline for Linear SVM Data Preparation
     %
     % PURPOSE: Reads the clinical CSV, extracts spatial metadata from the 
@@ -6,9 +6,9 @@ function PreprocessSVM()
     
     scriptDir = fileparts(mfilename('fullpath'));
     projectRoot = fileparts(fileparts(scriptDir));
-    SVMDir = fullfile(projectRoot, 'Python', 'SVM_Pipeline');
-    logDir = fullfile(SVMDir, 'Log_Files');
-    logPath = fullfile(logDir, 'PreprocessSVM.log');
+    commonDir = fullfile(projectRoot, 'Python', 'Common_Setup');
+    logDir = fullfile(commonDir, 'Log_Files');
+    logPath = fullfile(logDir, 'CommonPreprocess.log');
     spmDir = 'C:\Users\utente\Desktop\spm';
     tpmPath = fullfile(spmDir, 'tpm', 'TPM.nii');
     utilsPath = fullfile(projectRoot, 'MATLAB', 'utils');
@@ -21,7 +21,7 @@ function PreprocessSVM()
     csvFileName = 'covariateADCTRLsexAgeTIV.csv'; 
     
     % Initialize the logger to track the comparison
-    logger = Logger('PreprocessSVM');
+    logger = Logger('CommonPreprocess');
     try
         logger.addConsoleHandler('level', 'DEBUG', 'useColors', true);
         logger.success('Console logging successfully initialized.')
@@ -49,7 +49,7 @@ function PreprocessSVM()
         rethrow(ME);
     end
     
-    logger.info('--- Starting SVM Preprocessing Pipeline ---');
+    logger.info('--- Starting Preprocessing Pipeline ---');
     
     % --- PHASE 1: Scan & Metadata (Fail Fast Natively) ---
     logger.info('Scanning Cohort data from %s', cohortPath);
@@ -72,11 +72,11 @@ function PreprocessSVM()
     mask.computeTpmMask(tpmPath, threshold);
     
     % --- PHASE 3: Serialization (EAFP Pattern) ---
-    outMaskPath = fullfile(SVMDir, 'Results', 'tpm_mask.nii');
+    outMaskPath = fullfile(commonDir, 'Mask', 'tpm_mask.nii');
     logger.info('Exporting computed mask to disk...');
     
     
     mask.exportToNifti(outMaskPath);
     
-    logger.success('SVM Preprocessing complete. Mask safely saved at: %s', outMaskPath);
+    logger.success('Common Preprocessing complete. Mask safely saved at: %s', outMaskPath);
 end
