@@ -44,14 +44,7 @@ function RunVBMPipeline()
     end
     addpath(utilsPath);
 
-    spmDir = loadSpmEnvironment();
-    tpmPath = fullfile(spmDir, 'tpm', 'TPM.nii');
-
-    if ~isfile(tpmPath)
-        error('The TPM.nii file is missing from the SPM installation: %s', tpmPath);
-    end
-
-    % Initialize the logger to track the comparison
+    % Initialize the logger to track
     logger = Logger('VBMPipeline');
     logger.addConsoleHandler('level', 'DEBUG', 'useColors', true);
     logger.success('Console logging successfully initialized.');
@@ -75,8 +68,25 @@ function RunVBMPipeline()
             logDir, ME.message);
     end
 
+    
     % Kill the logger when the function exits
     cleaner = onCleanup(@() delete(logger));
+
+    try
+        spmDir = loadSpmEnvironment();
+        logger.success('SPM environment loaded successfully mapped at: %s', spmDir);
+    catch ME
+        logger.critical('FATAL: Could not resolve SPM dependency. Details: %s', ME.message);
+        error('RunVBMPipeline:SpmResolutionFailed', 'Pipeline aborted due to SPM environment failure.');
+    end
+    
+    tpmPath = fullfile(spmDir, 'tpm', 'TPM.nii');
+
+    if ~isfile(tpmPath)
+        logger.critical('The TPM.nii file is missing from the SPM installation: %s', tpmPath);
+        error('RunVBMPipeline:TpmMissing', 'TPM file not found: %s', tpmPath);
+    end
+
 
     %% 2. Data Loading and Grouping (CohortData)
     logger.info('--- Phase 1: Data Loading and Grouping ---');

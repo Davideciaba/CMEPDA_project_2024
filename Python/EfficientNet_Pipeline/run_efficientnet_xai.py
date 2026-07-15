@@ -10,8 +10,10 @@ project_root = current_file_path.parents[2]
 sys.path.append(str(project_root))
 
 from monai.data import Dataset, DataLoader
+from Python.utils.spm_loader import load_spm_environment
 from Python.utils.py_logger import CustomLogger
 from Python.utils.cv_manager import CVManager
+from Python.utils.tpm_mask_generator import TpmMaskGenerator
 from Python.Models.efficientnet_classifier import EfficientNetClassifier
 from Python.XAI.xai_efficientnet import EfficientNetExplainer
 from Python.utils.model_renderer import ModelRenderer
@@ -25,11 +27,37 @@ def run_efficientnet_xai():
     XAI_PLOTS_DIR = CURRENT_DIR / "Plots" / "XAI_Visualizations"
     mask_path = SETUP_DIR / "Mask" / "tpm_mask.nii"
 
+    log = CustomLogger(name="XAIPipeline")
+    log.add_console_handler(level="DEBUG", use_colors=True)
+    
+    if not mask_path.exists():
+        log.warning(f"TPM Mask not found at '{mask_path.name}'. Booting TPM Generator...")
+        try:
+            spm_dir = load_spm_environment()
+            log.success(f"SPM environment loaded successfully mapped at: {spm_dir}")
+        except Exception as e:
+            log.critical(f"FATAL: Could not resolve SPM dependency. Details: {e}")
+            sys.exit(1)
+        
+        tpm_path = spm_dir / "tpm" / "TPM.nii"
+        mask_generator = TpmMaskGenerator(logger=log)
+        
+        try:
+            mask_generator.generate_mask(
+                registry_csv_path=str(registry_csv_path),
+                tpm_nifti_path=str(tpm_path),
+                output_mask_path=str(mask_path)
+            )
+        except Exception as e:
+            log.critical(f"FATAL: Could not generate TPM mask natively. Details: {e}")
+            sys.exit(1)
+    else:
+         log.success("Valid Cached TPM Mask found. Bypassing Generation.")
+
     XAI_DIR.mkdir(parents=True, exist_ok=True)
     XAI_PLOTS_DIR.mkdir(parents=True, exist_ok=True)
 
-    log = CustomLogger(name="XAIPipeline")
-    log.add_console_handler(level="DEBUG", use_colors=True)
+    
     log.info("--- Booting EfficientNet Integrated Gradients Engine ---")
 
     # 1. Configurazione

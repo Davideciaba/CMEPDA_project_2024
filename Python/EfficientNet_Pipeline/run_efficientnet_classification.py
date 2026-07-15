@@ -11,9 +11,7 @@ project_root = current_file_path.parents[2]
 
 sys.path.append(str(project_root))
 
-from Python.utils.spm_loader import load_spm_environment
 from Python.utils.py_logger import CustomLogger
-from Python.utils.matlab_orchestrator import MatlabOrchestrator, MatlabTask
 from Python.Models.efficientnet_classifier import EfficientNetClassifier
 from Python.utils.cv_manager import CVManager
 from Python.utils.model_renderer import ModelRenderer
@@ -23,8 +21,6 @@ def run_efficientnet_classification():
 
     CURRENT_DIR = pathlib.Path(__file__).parent.resolve()
     PROJECT_DIR = CURRENT_DIR.parent.parent
-    PREPROCESS_DIR = PROJECT_DIR / "MATLAB" / "utils"
-    spm_dir = load_spm_environment()
     SETUP_DIR = PROJECT_DIR / "Python" / "Common_Setup"
 
     log = CustomLogger(name="EfficientNetPipeline")
@@ -34,17 +30,11 @@ def run_efficientnet_classification():
     log.add_file_handler(log_path, level="DEBUG")
     log.info("--- Booting 3D EfficientNet Engine ---")
     
-    preprocess_path = PREPROCESS_DIR / "CommonPreprocess.m"
-    preprocess_log_path = log_dir / "CommonPreprocess.log"
     registry_csv_path = SETUP_DIR / "python_registry.csv"
     results_dir = CURRENT_DIR / "Results"
     folds_json_path = SETUP_DIR / "cv_folds_registry.json"
     plots_dir = CURRENT_DIR / "Plots"
 
-    preproc_task = MatlabTask(script_path=preprocess_path, log_path=preprocess_log_path)
-        
-    with MatlabOrchestrator(logger=log, tasks=[preproc_task], include_paths=[spm_dir]) as orch:
-        orch.run_all()
     
     # 1. LOAD DATA
     log.info("Ingesting normalized registry for MONAI Dicts...")

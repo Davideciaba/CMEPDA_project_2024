@@ -9,9 +9,7 @@ via the CVManager, and triggers the SVM Double Cross-Validation.
 import sys
 import pathlib
 import pandas as pd
-import numpy as np
 import joblib
-import nibabel as nib
 
 # 1. Resolve absolute path to the current file
 current_file_path = pathlib.Path(__file__).resolve()
@@ -26,7 +24,7 @@ sys.path.append(str(project_root))
 # Internal Module Imports
 from Python.utils.spm_loader import load_spm_environment
 from Python.utils.py_logger import CustomLogger
-from Python.utils.matlab_orchestrator import MatlabOrchestrator, MatlabTask
+from Python.utils.tpm_mask_generator import TpmMaskGenerator
 from Python.utils.cv_manager import CVManager
 from Python.Models.svm_classifier import SVMClassifier
 from Python.utils.model_renderer import ModelRenderer
@@ -51,8 +49,6 @@ def run_svm_classification():
     
     CURRENT_DIR = pathlib.Path(__file__).parent.resolve()
     PROJECT_DIR = CURRENT_DIR.parent.parent
-    PREPROCESS_DIR = PROJECT_DIR / "MATLAB" / "utils"
-    spm_dir = load_spm_environment()
     SETUP_DIR = PROJECT_DIR / "Python" / "Common_Setup"
 
     log = CustomLogger(name="SVMPipeline")
@@ -62,14 +58,35 @@ def run_svm_classification():
     log.add_file_handler(log_path, level="DEBUG")
     log.info("--- Booting Decoupled SVM Engine ---")
 
-    
-    preprocess_path = PREPROCESS_DIR / "CommonPreprocess.m"
-    preprocess_log_path = log_dir / "CommonPreprocess.log"
     registry_csv_path = SETUP_DIR / "python_registry.csv"
     results_dir = CURRENT_DIR / "Results"
     mask_path = SETUP_DIR / "Mask" / "tpm_mask.nii"
     folds_json_path = SETUP_DIR / "cv_folds_registry.json"
     plots_dir = CURRENT_DIR / "Plots"
+
+    if not mask_path.exists():
+        log.warning(f"TPM Mask not found at '{mask_path.name}'. Booting TPM Generator...")
+        try:
+            spm_dir = load_spm_environment()
+            log.success(f"SPM environment loaded successfully mapped at: {spm_dir}")
+        except Exception as e:
+            log.critical(f"FATAL: Could not resolve SPM dependency. Details: {e}")
+            sys.exit(1)
+        
+        tpm_path = spm_dir / "tpm" / "TPM.nii"
+        mask_generator = TpmMaskGenerator(logger=log)
+        
+        try:
+            mask_generator.generate_mask(
+                registry_csv_path=str(registry_csv_path),
+                tpm_nifti_path=str(tpm_path),
+                output_mask_path=str(mask_path)
+            )
+        except Exception as e:
+            log.critical(f"FATAL: Could not generate TPM mask natively. Details: {e}")
+            sys.exit(1)
+    else:
+         log.success("Valid Cached TPM Mask found. Bypassing Generation.")
     
 
     """
@@ -96,13 +113,9 @@ def run_svm_classification():
             # Automatically delete the old mask and hash to prevent overwrite conflicts
             mask_path.unlink(missing_ok=True)
             hash_record_path.unlink(missing_ok=True)
-    """        
-    preproc_task = MatlabTask(script_path=preprocess_path, log_path=preprocess_log_path)
-        
-    with MatlabOrchestrator(logger=log, tasks=[preproc_task], include_paths=[spm_dir]) as orch:
-        orch.run_all()
+"""
             
-        """with open(hash_record_path, "w", encoding="utf-8") as f:
+    """with open(hash_record_path, "w", encoding="utf-8") as f:
             f.write(current_script_hash)
             
         log.success("MATLAB Mask generated and cryptographic signature frozen.")

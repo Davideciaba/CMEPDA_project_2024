@@ -217,7 +217,7 @@ classdef VBMAnalysis < handle
 
             obj.PrivateLogger.success('Statistical threshold computed successfully: T > %.3f', statThreshold);
         
-            % --- Export to NIfTI if requested ---
+            % Export to NIfTI if requested
             if ~isempty(exportPath)
                 obj.PrivateLogger.info('Exporting thresholded map to: %s', exportPath);
                 try
