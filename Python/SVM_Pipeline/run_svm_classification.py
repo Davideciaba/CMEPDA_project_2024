@@ -9,8 +9,7 @@ via the CVManager, and triggers the SVM Double Cross-Validation.
 import sys
 import pathlib
 import pandas as pd
-import numpy as np
-import nibabel as nib
+import joblib
 
 # 1. Resolve absolute path to the current file
 current_file_path = pathlib.Path(__file__).resolve()
@@ -23,12 +22,12 @@ sys.path.append(str(project_root))
 #import hashlib
 
 # Internal Module Imports
+from Python.utils.spm_loader import load_spm_environment
 from Python.utils.py_logger import CustomLogger
-from Python.utils.matlab_orchestrator import MatlabOrchestrator, MatlabTask
+from Python.utils.tpm_mask_generator import TpmMaskGenerator
 from Python.utils.cv_manager import CVManager
 from Python.Models.svm_classifier import SVMClassifier
 from Python.utils.model_renderer import ModelRenderer
-from Python.XAI.XAI_SVM import SVMExplainer 
 
 """
 def compute_file_hash(filepath: pathlib.Path) -> str:
@@ -46,12 +45,10 @@ def compute_file_hash(filepath: pathlib.Path) -> str:
     return sha256.hexdigest()
 """
 
-def run_svm_pipeline():
+def run_svm_classification():
     
     CURRENT_DIR = pathlib.Path(__file__).parent.resolve()
     PROJECT_DIR = CURRENT_DIR.parent.parent
-    PREPROCESS_DIR = PROJECT_DIR / "MATLAB" / "utils"
-    SPM_DIR = pathlib.Path("C:/Users/utente/Desktop/spm")
     SETUP_DIR = PROJECT_DIR / "Python" / "Common_Setup"
 
     log = CustomLogger(name="SVMPipeline")
@@ -61,14 +58,35 @@ def run_svm_pipeline():
     log.add_file_handler(log_path, level="DEBUG")
     log.info("--- Booting Decoupled SVM Engine ---")
 
-    
-    preprocess_path = PREPROCESS_DIR / "PreprocessSVM.m"
-    preprocess_log_path = log_dir / "PreprocessSVM.log"
     registry_csv_path = SETUP_DIR / "python_registry.csv"
     results_dir = CURRENT_DIR / "Results"
-    mask_path = results_dir / "tpm_mask.nii"
+    mask_path = SETUP_DIR / "Mask" / "tpm_mask.nii"
     folds_json_path = SETUP_DIR / "cv_folds_registry.json"
     plots_dir = CURRENT_DIR / "Plots"
+
+    if not mask_path.exists():
+        log.warning(f"TPM Mask not found at '{mask_path.name}'. Booting TPM Generator...")
+        try:
+            spm_dir = load_spm_environment()
+            log.success(f"SPM environment loaded successfully mapped at: {spm_dir}")
+        except Exception as e:
+            log.critical(f"FATAL: Could not resolve SPM dependency. Details: {e}")
+            sys.exit(1)
+        
+        tpm_path = spm_dir / "tpm" / "TPM.nii"
+        mask_generator = TpmMaskGenerator(logger=log)
+        
+        try:
+            mask_generator.generate_mask(
+                registry_csv_path=str(registry_csv_path),
+                tpm_nifti_path=str(tpm_path),
+                output_mask_path=str(mask_path)
+            )
+        except Exception as e:
+            log.critical(f"FATAL: Could not generate TPM mask natively. Details: {e}")
+            sys.exit(1)
+    else:
+         log.success("Valid Cached TPM Mask found. Bypassing Generation.")
     
 
     """
@@ -95,13 +113,9 @@ def run_svm_pipeline():
             # Automatically delete the old mask and hash to prevent overwrite conflicts
             mask_path.unlink(missing_ok=True)
             hash_record_path.unlink(missing_ok=True)
-    """        
-    preproc_task = MatlabTask(script_path=preprocess_path, log_path=preprocess_log_path)
-        
-    with MatlabOrchestrator(logger=log, tasks=[preproc_task], include_paths=[SPM_DIR]) as orch:
-        orch.run_all()
+"""
             
-        """with open(hash_record_path, "w", encoding="utf-8") as f:
+    """with open(hash_record_path, "w", encoding="utf-8") as f:
             f.write(current_script_hash)
             
         log.success("MATLAB Mask generated and cryptographic signature frozen.")
@@ -113,7 +127,7 @@ def run_svm_pipeline():
     C_DICT = {'C':[1e-4, 1e-3]}
     svm_engine = SVMClassifier(logger=log, param_grid=C_DICT)
     
-    subjects, X_full, y_full = svm_engine.load_real_data(str(registry_csv_path), str(mask_path))
+    subjects, X_full, y_full = svm_engine.load_data(str(registry_csv_path), str(mask_path))
     log.success(f"Data Loaded: {X_full.shape[0]} subjects ready.")
 
     # 3. LOAD & VALIDATE SSOT
@@ -170,113 +184,15 @@ def run_svm_pipeline():
     results_df.to_csv(str(csv_out_path), index=False)
     log.success(f"Raw Metrics successfully saved to: {csv_out_path.name}")
     
-    log.info("STEP 6: Extracting XAI Spatial Patterns (Raw, Haufe, Gaonkar) PER FOLD...")
-    explainer = SVMExplainer(logger=log)
-
-    log.info("Reading Affine Matrix and Spatial Geometry from TPM Mask header...")
-    mask_img = nib.load(str(mask_path))
-    mask_bool = mask_img.get_fdata() > 0
-    mask_affine = mask_img.affine
-
-    # Dynamically locate CTRL-117 using the Single Source of Truth (Registry)
-    registry_df = pd.read_csv(registry_csv_path)
-    ctrl_candidates = registry_df[registry_df['subject_id'].str.contains("CTRL-117")]
-    
-    bg_path = str(ctrl_candidates.iloc[0]['file_path']) if not ctrl_candidates.empty else None
+    log.info("Saving trained SVM models to disk for XAI extraction...")
 
     for artifact in artifacts:
         fold_id = artifact['fold_id']
-        optimal_c = artifact['optimal_C']
-        log.info(f"Processing XAI for Fold {fold_id} (C={optimal_c})...")
-        
-        trained_pipeline = artifact['model']
-        train_idx = artifact['train_idx']
-        
-        X_train_fold = X_full[train_idx]
-        y_train_fold = y_full[train_idx]
-        
-        X_train_scaled = trained_pipeline.named_steps['scaler'].transform(X_train_fold)
-        
-        raw_weights = trained_pipeline.named_steps['svc'].coef_[0]
-        decision_scores = trained_pipeline.decision_function(X_train_fold)
-        n_support_total = int(np.sum(trained_pipeline.named_steps['svc'].n_support_))
-        
-        raw_weights_top1 = np.where(np.abs(raw_weights) >= np.percentile(np.abs(raw_weights), 99), raw_weights, 0)
-        raw_weights_top5 = np.where(np.abs(raw_weights) >= np.percentile(np.abs(raw_weights), 95), raw_weights, 0)
-
-        haufe_map = explainer.compute_haufe_patterns(X_train_scaled, decision_scores)
-
-        haufe_map_top1 = np.where(np.abs(haufe_map) >= np.percentile(np.abs(haufe_map), 99), haufe_map, 0)
-        haufe_map_top5 = np.where(np.abs(haufe_map) >= np.percentile(np.abs(haufe_map), 95), haufe_map, 0)
-
-        gaonkar_z_map_thresholded_bonf005, _ = explainer.compute_gaonkar_maps(
-            X_train=X_train_scaled, 
-            y_train=y_train_fold, 
-            svm_weights=raw_weights, 
-            C_param=optimal_c, 
-            n_support=n_support_total,
-            correction='bonferroni', 
-            alpha=0.05
-        )
-        gaonkar_z_map_thresholded_fdr01, _ = explainer.compute_gaonkar_maps(
-            X_train=X_train_scaled, 
-            y_train=y_train_fold, 
-            svm_weights=raw_weights, 
-            C_param=optimal_c, 
-            n_support=n_support_total,
-            correction='fdr_by', 
-            alpha=0.1
-        )
-        
-        raw_nii_top1 = str(results_dir / f"SVM_Raw_Weights_Fold_{fold_id}_Top1.nii")
-        raw_nii_top5 = str(results_dir / f"SVM_Raw_Weights_Fold_{fold_id}_Top5.nii")
-        haufe_nii_top1 = str(results_dir / f"SVM_Haufe_Fold_{fold_id}_Top1.nii")
-        haufe_nii_top5 = str(results_dir / f"SVM_Haufe_Fold_{fold_id}_Top5.nii")
-        gaonkar_nii_bonf005 = str(results_dir / f"SVM_Gaonkar_Fold_{fold_id}_bonf005.nii")
-        gaonkar_nii_fdr01 = str(results_dir / f"SVM_Gaonkar_Fold_{fold_id}_fdr01.nii")
-
-        
-        explainer.reconstruct_and_save_3d(raw_weights_top1, mask_bool, mask_affine, raw_nii_top1)
-        explainer.reconstruct_and_save_3d(raw_weights_top5, mask_bool, mask_affine, raw_nii_top5)
-        explainer.reconstruct_and_save_3d(haufe_map_top1, mask_bool, mask_affine, haufe_nii_top1)
-        explainer.reconstruct_and_save_3d(haufe_map_top5, mask_bool, mask_affine, haufe_nii_top5)
-        explainer.reconstruct_and_save_3d(gaonkar_z_map_thresholded_bonf005, mask_bool, mask_affine, gaonkar_nii_bonf005)
-        explainer.reconstruct_and_save_3d(gaonkar_z_map_thresholded_fdr01, mask_bool, mask_affine, gaonkar_nii_fdr01)
-        
-        slice_config = 3.0
-        if bg_path:
-
-            renderer.plot_3d_activation_map(
-                bg_path, raw_nii_top1, str(mask_path), f"Raw Weights (Fold {fold_id}) Top 1%", 
-                f"SVM_RawWeights_Fold_{fold_id}_Top1.png", slice_config=slice_config
-            )
-
-            renderer.plot_3d_activation_map(
-                bg_path, raw_nii_top5, str(mask_path), f"Raw Weights (Fold {fold_id}) Top 5%", 
-                f"SVM_RawWeights_Fold_{fold_id}_Top5.png", slice_config=slice_config
-            )
-
-            renderer.plot_3d_activation_map(
-                bg_path, haufe_nii_top1, str(mask_path), f"Haufe Pattern (Fold {fold_id}) Top 1%", 
-                f"SVM_Haufe_Fold_{fold_id}_Top1.png", slice_config=slice_config
-            )
-
-            renderer.plot_3d_activation_map(
-                bg_path, haufe_nii_top5, str(mask_path), f"Haufe Pattern (Fold {fold_id}) Top 5%", 
-                f"SVM_Haufe_Fold_{fold_id}_Top5.png", slice_config=slice_config
-            )
-
-            renderer.plot_3d_activation_map(
-                bg_path, gaonkar_nii_bonf005, str(mask_path), f"Gaonkar Z-Score (Fold {fold_id}) Bonf 0.05", 
-                f"SVM_Gaonkar_Fold_{fold_id}_bonf005.png", slice_config=slice_config
-            )
-
-            renderer.plot_3d_activation_map(
-                bg_path, gaonkar_nii_fdr01, str(mask_path), f"Gaonkar Z-Score (Fold {fold_id}) FDR 0.1", 
-                f"SVM_Gaonkar_Fold_{fold_id}_fdr01.png", slice_config=slice_config
-            )
+        model_out_path = results_dir / f"SVM_Model_Fold_{fold_id}.joblib"
+        joblib.dump(artifact['model'], str(model_out_path))
+        log.debug(f"Saved SVM Pipeline: {model_out_path.name}")
 
     log.success("--- SVM EXECUTION COMPLETE ---")
 
 if __name__ == "__main__":
-    run_svm_pipeline()
+    run_svm_classification()

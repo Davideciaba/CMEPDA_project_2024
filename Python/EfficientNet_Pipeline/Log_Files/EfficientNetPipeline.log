@@ -1,0 +1,17 @@
+2026-07-14 13:14:33.814 | INFO     | run_efficientnet_classification.py:run_efficientnet_classification:34 - --- Booting 3D EfficientNet Engine ---
+2026-07-14 13:14:33.814 | INFO     | matlab_orchestrator.py:start_engine:91 - Booting up MATLAB Engine (this may take a few seconds)...
+2026-07-14 13:14:46.489 | SUCCESS  | matlab_orchestrator.py:start_engine:94 - MATLAB Engine connected successfully.
+2026-07-14 13:14:46.932 | INFO     | matlab_orchestrator.py:_execute_task_real_time:202 - Initiating Task [CommonPreprocess] in background thread... | Engine = MATLAB | Module = CommonPreprocess
+2026-07-14 13:14:46.932 | INFO     | matlab_orchestrator.py:_execute_task_real_time:203 - Tailing physical log file at: C:\Users\utente\Desktop\Computing Methods\CMEPDA_project_2024\Python\EfficientNet_Pipeline\Log_Files\CommonPreprocess.log | Engine = MATLAB | Module = CommonPreprocess
+2026-07-14 13:14:52.262 | SUCCESS  | matlab_orchestrator.py:_execute_task_real_time:259 - Task [CommonPreprocess] executed completely. | Engine = MATLAB | Module = CommonPreprocess
+2026-07-14 13:14:52.262 | INFO     | matlab_orchestrator.py:stop_engine:117 - Shutting down MATLAB Engine...
+2026-07-14 13:14:52.286 | SUCCESS  | matlab_orchestrator.py:stop_engine:125 - MATLAB Engine terminated.
+2026-07-14 13:14:52.286 | INFO     | run_efficientnet_classification.py:run_efficientnet_classification:49 - Ingesting normalized registry for MONAI Dicts...
+2026-07-14 13:14:52.361 | SUCCESS  | run_efficientnet_classification.py:run_efficientnet_classification:60 - Data Loaded: 333 3D NIfTI pointers mapped.
+2026-07-14 13:14:52.362 | INFO     | run_efficientnet_classification.py:run_efficientnet_classification:63 - Loading Frozen Fold Artifact...
+2026-07-14 13:14:52.410 | SUCCESS  | run_efficientnet_classification.py:run_efficientnet_classification:79 - Security Signature validated. Fold integrity is 100% guaranteed.
+2026-07-14 13:14:52.411 | INFO     | run_efficientnet_classification.py:run_efficientnet_classification:82 - Executing CNN Double Cross Validation...
+2026-07-14 13:14:52.412 | INFO     | efficientnet_classifier.py:execute_nested_cv:226 - Starting EfficientNet Nested CV (Grid Search: 16 combinations).
+2026-07-14 13:14:52.413 | INFO     | efficientnet_classifier.py:execute_nested_cv:227 - Features - Early Stopping: True | SWA: True
+2026-07-14 13:14:52.420 | INFO     | efficientnet_classifier.py:execute_nested_cv:233 - --- Processing Outer Fold 1/5 ---
+2026-07-14 13:14:52.421 | DEBUG    | efficientnet_classifier.py:execute_nested_cv:255 - Grid Search Combo -> Opt:adamw, Sched:none, LR:0.0001, WD:0.001

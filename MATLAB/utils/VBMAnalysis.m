@@ -40,13 +40,8 @@ classdef VBMAnalysis < handle
             end
             
             % Directory management
-            try
+            if ~exist(outputDir, 'dir')
                 mkdir(outputDir);
-            catch ME
-                % Ignore if it already exists; otherwise, throw an exception
-                if ~contains(ME.identifier, 'Exists')
-                    rethrow(ME);
-                end
             end
             
             % Initialize SPM
@@ -222,7 +217,7 @@ classdef VBMAnalysis < handle
 
             obj.PrivateLogger.success('Statistical threshold computed successfully: T > %.3f', statThreshold);
         
-            % --- Export to NIfTI if requested ---
+            % Export to NIfTI if requested
             if ~isempty(exportPath)
                 obj.PrivateLogger.info('Exporting thresholded map to: %s', exportPath);
                 try

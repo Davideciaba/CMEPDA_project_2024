@@ -7,7 +7,8 @@ Multi-GPU DataParallel scaling, and decoupled atomic methods for training, valid
 
 Designed as a pure library module without global execution blocks.
 """
-import os
+import collections
+import copy
 import numpy as np
 import pandas as pd
 import torch
@@ -18,7 +19,8 @@ from sklearn.metrics import (
     balanced_accuracy_score, 
     roc_auc_score, 
     f1_score, 
-    confusion_matrix
+    confusion_matrix,
+    roc_curve
 )
 
 # MONAI Native Components
@@ -27,15 +29,13 @@ from monai.data import DataLoader, Dataset
 from monai.transforms import (
     Compose, 
     LoadImaged, 
-    EnsureChannelFirstd, 
-    ScaleIntensityd, 
+    EnsureChannelFirstd,  
     EnsureTyped,
-    ResizeWithPadOrCropd
+    SpatialPadd
 )
 
-# --- GLOBAL CONFIGURATION CONSTANTS ---
-CNN_LR_GRID = [1e-3, 1e-4]
-CNN_WD_GRID = [1e-4, 1e-5]
+from Python.utils.py_logger import CustomLogger
+
 
 
 class EfficientNetClassifier:
@@ -45,22 +45,29 @@ class EfficientNetClassifier:
     for training, validation, and raw inference (XAI-ready).
     """
 
-    def __init__(self, logger: Any, device: torch.device, is_dummy: bool = False):
+    def __init__(self, logger: CustomLogger, device: torch.device, param_grid: Dict[str, List[Any]]):
         """Initializes the DL Engine and inventories the hardware state."""
         self.logger = logger
         self.device = device
-        self.is_dummy = is_dummy
+        self.param_grid = param_grid
+
+        # Ensure default grid keys exist to avoid KeyError if not provided by user
+        if 'optimizer' not in self.param_grid: self.param_grid['optimizer'] = ['adamw']
+        if 'scheduler' not in self.param_grid: self.param_grid['scheduler'] = ['none']
+        if 'lr' not in self.param_grid: self.param_grid['lr'] = [1e-3]
+        if 'wd' not in self.param_grid: self.param_grid['wd'] = [1e-2]
         
         self.gpu_count = torch.cuda.device_count() if self.device.type == 'cuda' else 0
         if self.gpu_count > 1:
             self.logger.info(f"HPC Parallelization: Using {self.gpu_count} GPUs.")
 
     @staticmethod
-    def load_data_dicts(csv_path: str) -> Tuple[np.ndarray, List[Dict[str, Any]], np.ndarray]:
+    def load_data(csv_path: str) -> Tuple[np.ndarray, List[Dict[str, Any]], np.ndarray]:
         """
         Generates lightweight Dictionary pointers mapping strings to disk assets.
         """
         df = pd.read_csv(csv_path)
+
         subjects, data_dicts, y_list = [], [], []
         
         for _, row in df.iterrows():
@@ -71,14 +78,14 @@ class EfficientNetClassifier:
             
         return np.array(subjects), data_dicts, np.array(y_list)
 
-    def _evaluate_classification(self, y_true: np.ndarray, y_pred: np.ndarray, y_prob: np.ndarray) -> Dict[str, float]:
+    def _evaluate_classification(self, y_true: np.ndarray, y_pred: np.ndarray, y_decision: np.ndarray) -> Dict[str, float]:
         """Internal helper to compute safe clinical metrics (Accuracy, AUROC)."""
         tn, fp, fn, tp = confusion_matrix(y_true, y_pred, labels=[0, 1]).ravel()
         sensitivity = tp / (tp + fn) if (tp + fn) > 0 else 0.0
         specificity = tn / (tn + fp) if (tn + fp) > 0 else 0.0
         
         try:
-            auc_score = roc_auc_score(y_true, y_prob)
+            auc_score = roc_auc_score(y_true, y_decision)
         except ValueError:
             auc_score = float('nan')
             
@@ -95,35 +102,55 @@ class EfficientNetClassifier:
         """Defines the MONAI data-stream preprocessing queue."""
         keys = ["image"]
         transforms = []
-        if not self.is_dummy:
-            transforms.extend([
-                LoadImaged(keys=keys), 
-                EnsureChannelFirstd(keys=keys),
-                # Spatial Formatting: Adapts 121x145x121 inputs to strict 128x128x128 dimensions.
-                # Mode "constant" ensures background voxel additions equal 0 by default.
-                # Method "symmetric" balances both padding and cropping mathematically.
-                ResizeWithPadOrCropd(
-                    keys=keys,
-                    spatial_size=(128, 128, 128),
-                    method="symmetric",
-                    mode="constant"
-                ),
-                ScaleIntensityd(keys=keys)
-            ])
+        transforms.extend([
+            LoadImaged(keys=keys), 
+            EnsureChannelFirstd(keys=keys), # Ensure the correct dimension (C, H, W)
+            # Spatial Padding: Adapts 121x145x121 inputs to 160x160x160 dimensions.
+            # Mode "constant" ensures background voxel additions equal 0 by default.
+            # Method "symmetric" balances padding mathematically.
+            SpatialPadd(
+                keys=keys,
+                spatial_size=(160, 160, 160),
+                method="symmetric",
+                mode="constant"
+            )
+        ])
         transforms.append(EnsureTyped(keys=["image", "label"], track_meta=False))
         return Compose(transforms)
 
-    def _prepare_model_for_parallelism(self) -> nn.Module:
+    def _prepare_model(self) -> nn.Module:
         """Instantiates EfficientNet-B0 3D, scaling to Multi-GPU via nn.DataParallel."""
         model = EfficientNetBN(model_name="efficientnet-b0", spatial_dims=3, in_channels=1, num_classes=2)
         if self.gpu_count > 1:
             model = nn.DataParallel(model)
         return model.to(self.device)
 
-    def _create_dataloader(self, subset_dicts: List[Dict[str, Any]], batch_size: int, shuffle: bool, num_workers: int, pin_memory: bool, drop_last: bool = False) -> DataLoader:
+    def _create_dataloader(self, subset_dicts: List[Dict[str, Any]], batch_size: int, shuffle: bool, num_workers: int) -> DataLoader:
         """Assembles a multi-threaded asynchronous MONAI stream iterator."""
+        pin_memory = True if self.device.type == 'cuda' else False
         dataset = Dataset(data=subset_dicts, transform=self._get_transforms())
-        return DataLoader(dataset, batch_size=batch_size, shuffle=shuffle, num_workers=num_workers, pin_memory=pin_memory, drop_last=drop_last)
+        return DataLoader(dataset, batch_size=batch_size, shuffle=shuffle, num_workers=num_workers, pin_memory=pin_memory)
+
+    def _configure_optimizer(self, model: nn.Module, opt_name: str, lr: float, wd: float) -> optim.Optimizer:
+        """Dynamically configures the optimizer based on string name."""
+        opt_name = opt_name.lower()
+        if opt_name == 'adam':
+            return optim.Adam(model.parameters(), lr=lr, weight_decay=wd)
+        elif opt_name == 'sgd':
+            return optim.SGD(model.parameters(), lr=lr, weight_decay=wd, momentum=0.9)
+        elif opt_name == 'rmsprop':
+            return optim.RMSprop(model.parameters(), lr=lr, weight_decay=wd)
+        else:
+            return optim.AdamW(model.parameters(), lr=lr, weight_decay=wd)
+    
+    def _configure_scheduler(self, optimizer: optim.Optimizer, sched_name: str):
+        """Dynamically configures the learning rate scheduler."""
+        sched_name = sched_name.lower()
+        if sched_name == 'step':
+            return optim.lr_scheduler.StepLR(optimizer, step_size=10)
+        elif sched_name == 'exp':
+            return optim.lr_scheduler.ExponentialLR(optimizer, gamma=0.9)
+        return None
 
     def _train_epoch(self, model: nn.Module, loader: DataLoader, optimizer: optim.Optimizer, criterion: nn.Module) -> float:
         """Executes a single Training Epoch (Forward and Backward pass)."""
@@ -159,6 +186,15 @@ class EfficientNetClassifier:
                 val_loss += loss.item()
                 
         return val_loss / max(1, len(loader))
+    
+    def _average_weights(self, state_dicts: List[Dict[str, torch.Tensor]]) -> Dict[str, torch.Tensor]:
+        """Performs Polyak/Stochastic Weight Averaging across a list of model states."""
+        avg_dict = {k: v.clone() for k, v in state_dicts[0].items()}
+        for key in avg_dict.keys():
+            for i in range(1, len(state_dicts)):
+                avg_dict[key] += state_dicts[i][key]
+            avg_dict[key] = torch.div(avg_dict[key], len(state_dicts))
+        return avg_dict
 
     def predict(self, model: nn.Module, loader: DataLoader) -> Tuple[np.ndarray, np.ndarray]:
         """
@@ -178,87 +214,194 @@ class EfficientNetClassifier:
         return np.array(all_preds), np.array(all_probs)
 
     def execute_nested_cv(self, data_dicts: List[Dict[str, Any]], y: np.ndarray, subjects: np.ndarray, 
-                          cv_splits: List[Dict[str, Any]], batch_size: int = 4, max_epochs: int = 30, patience: int = 5, num_workers: int = 4) -> Tuple[pd.DataFrame, List[Dict[str, Any]]]:
-        """Orchestrates the macro Deep Learning Double Cross-Validation architecture."""
-        pin_memory = True if self.device.type == 'cuda' else False
-        self.logger.info(f"Starting EfficientNet Nested CV: {len(cv_splits)} Outer Folds, {len(cv_splits[0]['inner_splits_relative'])} Inner Folds.")
-        
+                          cv_splits: List[Dict[str, Any]], batch_size: int = 4, max_epochs: int = 50, 
+                          use_early_stopping: bool = True, use_swa: bool = True, 
+                          patience: int = 10, min_delta: float = 1e-4, swa_n: int = 5, 
+                          num_workers: int = 4) -> Tuple[pd.DataFrame, List[Dict[str, Any]]]:
+        """
+        Orchestrates Deep Learning CV with Nested Grid Search.
+        Provides Modular toggles for Inner-Fold Early Stopping and SWA.
+        """
+        total_combos = len(self.param_grid['lr']) * len(self.param_grid['wd']) * len(self.param_grid['optimizer']) * len(self.param_grid['scheduler'])
+        self.logger.info(f"Starting EfficientNet Nested CV (Grid Search: {total_combos} combinations).")
+        self.logger.info(f"Features - Early Stopping: {use_early_stopping} | SWA: {use_swa}")
+            
         fold_metrics_list, fold_artifacts = [], []
 
         for split in cv_splits:
             fold_idx = split['fold']
-            # Map Absolute Outer Indices
-            train_idx, test_idx = split['outer_train_idx'], split['outer_test_idx']
-            train_dicts, test_dicts = [data_dicts[i] for i in train_idx], [data_dicts[i] for i in test_idx]
-            y_train, y_test = y[train_idx], y[test_idx]
-
-            # Map Relative Inner Indices
-            inner_iterator = split['inner_splits_relative']
-
-            # --- INNER CV: Grid Search ---
-            best_grid_loss, best_lr, best_wd = float('inf'), CNN_LR_GRID[0], CNN_WD_GRID[0]
-
-            for lr in CNN_LR_GRID:
-                for wd in CNN_WD_GRID:
-                    combo_losses = []
-                    for in_tr_idx, in_val_idx in inner_iterator:
-                        in_tr_loader = self._create_dataloader([train_dicts[i] for i in in_tr_idx], batch_size, True, num_workers, pin_memory, drop_last=True)
-                        in_val_loader = self._create_dataloader([train_dicts[i] for i in in_val_idx], batch_size, False, num_workers, pin_memory, drop_last=False)
-
-
-                        model_cv = self._prepare_model_for_parallelism()
-                        optimizer_cv = optim.AdamW(model_cv.parameters(), lr=lr, weight_decay=wd)
-                        criterion_cv = nn.CrossEntropyLoss()
-                        
-                        for _ in range(3):
-                            self._train_epoch(model_cv, in_tr_loader, optimizer_cv, criterion_cv)
-                        
-                        v_loss = self._validate_epoch(model_cv, in_val_loader, criterion_cv)
-                        combo_losses.append(v_loss)
-                    
-                    if np.mean(combo_losses) < best_grid_loss:
-                        best_grid_loss, best_lr, best_wd = float(np.mean(combo_losses)), lr, wd
-
-            # --- OUTER CV: Final Structural Training ---
-            # Extract relative structural indices computed by CVManager
-            X_tr_idx, X_val_idx = split['final_train_idx_relative'], split['final_val_idx_relative']
+            self.logger.info(f"--- Processing Outer Fold {fold_idx}/{len(cv_splits)} ---")
             
-            tr_loader = self._create_dataloader([train_dicts[i] for i in X_tr_idx], batch_size, True, num_workers, pin_memory, drop_last=True)
-            val_loader = self._create_dataloader([train_dicts[i] for i in X_val_idx], batch_size, False, num_workers, pin_memory, drop_last=False)
-            te_loader = self._create_dataloader(test_dicts, batch_size, False, num_workers, pin_memory, drop_last=False)
+            train_idx, test_idx = split['outer_train_idx'], split['outer_test_idx']
+            train_dicts = [data_dicts[i] for i in train_idx]
+            test_dicts = [data_dicts[i] for i in test_idx]
+            y_test = y[test_idx]
+            inner_iterator = split['inner_splits_relative']
+            
+            # --- PHASE 1: NESTED GRID SEARCH ON INNER CV ---
+            best_grid_val_loss = float('inf')
+            best_params = {'lr': None, 'wd': None, 'opt': None, 'sched': None}
+            best_outer_target_epochs = max_epochs
 
-            model = self._prepare_model_for_parallelism()
-            optimizer = optim.AdamW(model.parameters(), lr=best_lr, weight_decay=best_wd)
+            # Telemetry for plotting inner folds
+            optimal_inner_loss_history = {} 
+            best_inner_bal_acc_mean = 0.0
+
+            for opt_name in self.param_grid['optimizer']:
+                for sched_name in self.param_grid['scheduler']:
+                    for lr in self.param_grid['lr']:
+                        for wd in self.param_grid['wd']:
+                            combo_str = f"Opt:{opt_name}, Sched:{sched_name}, LR:{lr}, WD:{wd}"
+                            self.logger.debug(f"Grid Search Combo -> {combo_str}")
+                            
+                            combo_val_losses = []
+                            combo_best_epochs = []
+                            combo_early_stopped = []
+                            combo_bal_accs = []
+                            combo_loss_history = {} # Store history for this combo
+
+                            for inner_fold_idx, (in_tr_idx, in_val_idx) in enumerate(inner_iterator):
+                                in_tr_loader = self._create_dataloader([train_dicts[i] for i in in_tr_idx], batch_size, True, num_workers)
+                                in_val_loader = self._create_dataloader([train_dicts[i] for i in in_val_idx], batch_size, False, num_workers)
+
+                                model_cv = self._prepare_model()
+                                optimizer_cv = self._configure_optimizer(model_cv, opt_name, lr, wd)
+                                scheduler_cv = self._configure_scheduler(optimizer_cv, sched_name)
+                                criterion_cv = nn.CrossEntropyLoss()
+                                
+                                in_best_val_loss = float('inf')
+                                patience_counter = 0
+                                best_epoch = max_epochs # Default if ES not used
+                                stopped = False
+                                history = {'train_loss': [], 'val_loss': []}
+
+                                # Sliding window buffer for Stochastic Weight Averaging
+                                swa_buffer = collections.deque(maxlen=swa_n)
+
+                                for epoch in range(max_epochs):
+                                    tr_loss = self._train_epoch(model_cv, in_tr_loader, optimizer_cv, criterion_cv)
+                                    val_loss = self._validate_epoch(model_cv, in_val_loader, criterion_cv)
+                                    
+                                    if scheduler_cv:
+                                        scheduler_cv.step()
+                                        
+                                    history['train_loss'].append(tr_loss)
+                                    history['val_loss'].append(val_loss)
+
+                                    if use_swa:
+                                        swa_buffer.append(copy.deepcopy(model_cv.state_dict()))
+
+                                    if use_early_stopping:
+                                        if val_loss < in_best_val_loss - min_delta:
+                                            in_best_val_loss = val_loss
+                                            best_epoch = epoch
+                                            patience_counter = 0
+                                        else:
+                                            patience_counter += 1
+
+                                        if patience_counter >= patience:
+                                            stopped = True
+                                            break
+                                    else:
+                                        # If no early stopping, we just track the loss for the grid search comparison
+                                        in_best_val_loss = val_loss
+
+                                # End of Inner Fold Training
+                                if use_swa and len(swa_buffer) > 0:
+                                    avg_inner_state = self._average_weights(list(swa_buffer))
+                                    model_cv.load_state_dict(avg_inner_state)
+                                    # Re-evaluate val_loss with SWA weights to make Grid Search decision
+                                    in_best_val_loss = self._validate_epoch(model_cv, in_val_loader, criterion_cv)
+
+                                # Calculate Inner Balanced Accuracy for this fold
+                                y_val_true = np.array([train_dicts[i]['label'] for i in in_val_idx])
+                                y_val_pred, _ = self.predict(model_cv, in_val_loader)
+                                combo_bal_accs.append(balanced_accuracy_score(y_val_true, y_val_pred))
+
+                                combo_val_losses.append(in_best_val_loss)
+                                combo_best_epochs.append(best_epoch)
+                                combo_early_stopped.append(stopped)
+                                combo_loss_history[f"inner_fold_{inner_fold_idx}"] = history
+
+                            # Evaluate Grid Combination
+                            avg_combo_val_loss = float(np.mean(combo_val_losses))
+                            
+                            if avg_combo_val_loss < best_grid_val_loss:
+                                best_grid_val_loss = avg_combo_val_loss
+                                best_params = {'lr': lr, 'wd': wd, 'opt': opt_name, 'sched': sched_name}
+                                optimal_inner_loss_history = combo_loss_history
+                                best_inner_bal_acc_mean = float(np.mean(combo_bal_accs))
+                                
+                                # Determine Outer Target Epochs for this winning combo
+                                if use_early_stopping:
+                                    majority_stopped = sum(combo_early_stopped) > (len(inner_iterator) / 2)
+                                    if majority_stopped:
+                                        # Use the max of the best epochs (plus a tiny 10% buffer)
+                                        base_epochs = max(combo_best_epochs)
+                                        best_outer_target_epochs = int(round(base_epochs + 1 + base_epochs/10))
+                                        # Ensure we don't exceed max_epochs
+                                        best_outer_target_epochs = min(best_outer_target_epochs, max_epochs)
+                                    else:
+                                        best_outer_target_epochs = max_epochs
+                                else:
+                                    best_outer_target_epochs = max_epochs
+
+            self.logger.info(f"Optimal Grid Combo -> {best_params} | Target Epochs: {best_outer_target_epochs}")
+
+            # --- PHASE 2: FINAL OUTER CV TRAINING (FULL TRAIN SET) ---
+            full_tr_loader = self._create_dataloader(train_dicts, batch_size, True, num_workers)
+            te_loader = self._create_dataloader(test_dicts, batch_size, False, num_workers)
+
+            model = self._prepare_model()
+            optimizer = self._configure_optimizer(model, best_params['opt'], best_params['lr'], best_params['wd'])
+            scheduler = self._configure_scheduler(optimizer, best_params['sched'])
             criterion = nn.CrossEntropyLoss()
             
-            best_val_loss, epochs_no_improve, best_state = float('inf'), 0, None
+            outer_swa_buffer = collections.deque(maxlen=swa_n)
+            outer_loss_history = {'train_loss': [], 'test_loss': []} # Track test loss purely for telemetry/plotting
             
-            for epoch in range(max_epochs):
-                self._train_epoch(model, tr_loader, optimizer, criterion)
-                val_loss = self._validate_epoch(model, val_loader, criterion)
+            for epoch in range(best_outer_target_epochs):
+                tr_loss = self._train_epoch(model, full_tr_loader, optimizer, criterion)
                 
-                if val_loss < best_val_loss:
-                    best_val_loss, epochs_no_improve = val_loss, 0
-                    best_state = {k: v.cpu().clone() for k, v in model.state_dict().items()}
-                else:
-                    epochs_no_improve += 1
-                    if patience and epochs_no_improve >= patience:
-                        break
-            
-            if best_state: 
-                model.load_state_dict(best_state)
+                # Evaluate on test set just for the learning curves (NOT for early stopping)
+                te_loss = self._validate_epoch(model, te_loader, criterion)
+                
+                if scheduler:
+                    scheduler.step()
+                    
+                outer_loss_history['train_loss'].append(tr_loss)
+                outer_loss_history['test_loss'].append(te_loss)
+                
+                if use_swa:
+                    outer_swa_buffer.append(copy.deepcopy(model.state_dict()))
 
-            # --- OUTER CV: Out-of-Sample Predictive Evaluation ---
+            if use_swa and len(outer_swa_buffer) > 0:
+                final_swa_state = self._average_weights(list(outer_swa_buffer))
+                model.load_state_dict(final_swa_state)
+
+            # --- PHASE 3: PREDICTION & EVALUATION ---
             y_pred, y_prob = self.predict(model, te_loader)
+            fpr, tpr, _ = roc_curve(y_test, y_prob)
             
             metrics = self._evaluate_classification(y_test, y_pred, y_prob)
             metrics['Fold'] = fold_idx
+            metrics['Inner_CV_BalAcc_Mean'] = best_inner_bal_acc_mean # Added for pipeline aggregation
             fold_metrics_list.append(metrics)
             
+            # Save comprehensive artifacts for ModelRenderer
             fold_artifacts.append({
-                'fold_id': fold_idx, 'optimal_lr': best_lr, 'optimal_wd': best_wd,
-                'test_subjects': subjects[test_idx], 'y_true': y_test, 'y_pred': y_pred, 'y_prob': y_prob
+                'fold_id': fold_idx, 
+                'optimal_params': best_params,
+                'target_epochs': best_outer_target_epochs, 
+                'test_subjects': subjects[test_idx], 
+                'y_true': y_test, 
+                'y_pred': y_pred, 
+                'y_prob': y_prob,
+                'roc_fpr': fpr, # Added for ROC plotting
+                'roc_tpr': tpr, # Added for ROC plotting
+                'inner_loss_history': optimal_inner_loss_history, # Added for plotting
+                'outer_loss_history': outer_loss_history # Added for plotting
             })
 
-        self.logger.info("CNN Nested CV Evaluation Completed.")
+        self.logger.info("EfficientNet Nested CV Evaluation Completed.")
         return pd.DataFrame(fold_metrics_list), fold_artifacts
