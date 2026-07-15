@@ -1,0 +1,116 @@
+ROI_ID,ROI_Name,Mean_ROI_Signal,Sum_ROI_Signal
+32,Left Amygdala,3.8994177068074545,1462.2816400527954
+31,Right Amygdala,3.1170134353127708,1165.7630248069763
+117,Left Ent entorhinal area,2.0320931221473373,1400.1121611595154
+116,Right Ent entorhinal area,1.25185926182492,833.7382683753967
+48,Left Hippocampus,0.8157065281366231,1108.545171737671
+47,Right Hippocampus,0.5949572823026366,866.8527603149414
+171,Left PHG parahippocampal gyrus,0.345841860190647,411.89765548706055
+203,Left TMP temporal pole,0.1345347443947921,477.8674120903015
+200,Right STG superior temporal gyrus,0.08608056979899453,268.48529720306396
+35,Brain Stem,0.06696357491524628,463.6557927131653
+166,Right PCgG posterior cingulate gyrus,0.06339705366532779,104.4783444404602
+100,Right ACgG anterior cingulate gyrus,0.05369759302460746,95.58171558380127
+195,Left SMG supramarginal gyrus,0.05176490958904661,207.3702278137207
+207,Left TTG transverse temporal gyrus,0.032383716318028916,21.89139223098755
+59,Right Thalamus Proper,0.03167175465204245,94.69854640960693
+167,Left PCgG posterior cingulate gyrus,0.03001893220839503,56.34553575515747
+58,Left Putamen,0.02935679138051292,50.78724908828735
+139,Left MCgG middle cingulate gyrus,0.02747394602063676,58.5195050239563
+60,Left Thalamus Proper,0.024410994499116843,76.8213996887207
+178,Right POrG posterior orbital gyrus,0.017387020054148203,17.473955154418945
+109,Left Calc calcarine cortex,0.013322340363758943,21.502257347106934
+143,Left MFG middle frontal gyrus,0.013157112172444661,123.3479266166687
+177,Left PoG postcentral gyrus,0.013002362850623688,70.55082082748413
+128,Right IOG inferior occipital gyrus,0.008266548452079069,21.67489004135132
+55,Right Pallidum,0.007878483609950289,4.443464756011963
+153,Left MSFG superior frontal gyrus medial segment,0.007369607985218498,22.09408473968506
+164,Right OrIFG orbital part of the inferior frontal gyrus,0.007077616333161425,4.218259334564209
+155,Left MTG middle temporal gyrus,0.006891187547670628,44.18629455566406
+182,Right PrG precentral gyrus,0.006749388768661794,40.415339946746826
+133,Left ITG inferior temporal gyrus,0.006129422711812697,30.175148010253906
+154,Right MTG middle temporal gyrus,0.006072692248333993,39.42999076843262
+202,Right TMP temporal pole,0.005981503434110561,21.395837783813477
+201,Left STG superior temporal gyrus,0.00585537349722829,17.33776092529297
+198,Right SPL superior parietal lobule,0.0058446832556205836,30.67874240875244
+145,Left MOG middle occipital gyrus,0.005002865714209113,13.302619934082031
+183,Left PrG precentral gyrus,0.004386212420808637,26.365522861480713
+170,Right PHG parahippocampal gyrus,0.00394958451736805,4.245803356170654
+132,Right ITG inferior temporal gyrus,0.0034185278004613415,17.051616668701172
+199,Left SPL superior parietal lobule,0.0033380101400128964,17.441102981567383
+120,Right FRP frontal pole,0.0027132712935205535,4.327667713165283
+113,Left CO central operculum,0.0024273034962790665,4.221080780029297
+146,Right MOrG medial orbital gyrus,0.002385207202446588,4.248054027557373
+115,Left Cun cuneus,0.0020496170077703695,4.168920993804932
+138,Right MCgG middle cingulate gyrus,0.0020372349987798897,4.194666862487793
+193,Left SMC supplementary motor cortex,0.001834938548878916,4.427706718444824
+152,Right MSFG superior frontal gyrus medial segment,0.0011867660007396329,4.2189531326293945
+191,Left SFG superior frontal gyrus,0.0006209573843468685,4.241138935089111
+37,Left Caudate,0.0,0.0
+36,Right Caudate,0.0,0.0
+101,Left ACgG anterior cingulate gyrus,0.0,0.0
+57,Right Putamen,0.0,0.0
+136,Right LOrG lateral orbital gyrus,0.0,0.0
+137,Left LOrG lateral orbital gyrus,0.0,0.0
+134,Right LiG lingual gyrus,0.0,0.0
+135,Left LiG lingual gyrus,0.0,0.0
+123,Left FuG fusiform gyrus,0.0,0.0
+124,Right GRe gyrus rectus,0.0,0.0
+125,Left GRe gyrus rectus,0.0,0.0
+129,Left IOG inferior occipital gyrus,0.0,0.0
+121,Left FRP frontal pole,0.0,0.0
+122,Right FuG fusiform gyrus,0.0,0.0
+106,Right AnG angular gyrus,0.0,0.0
+105,Left AOrG anterior orbital gyrus,0.0,0.0
+114,Right Cun cuneus,0.0,0.0
+112,Right CO central operculum,0.0,0.0
+118,Right FO frontal operculum,0.0,0.0
+119,Left FO frontal operculum,0.0,0.0
+103,Left AIns anterior insula,0.0,0.0
+104,Right AOrG anterior orbital gyrus,0.0,0.0
+102,Right AIns anterior insula,0.0,0.0
+108,Right Calc calcarine cortex,0.0,0.0
+107,Left AnG angular gyrus,0.0,0.0
+75,Left Basal Forebrain,0.0,0.0
+76,Right Basal Forebrain,0.0,0.0
+23,Right Accumbens Area,0.0,0.0
+30,Left Accumbens Area,0.0,0.0
+56,Left Pallidum,0.0,0.0
+148,Right MPoG postcentral gyrus medial segment,0.0,0.0
+149,Left MPoG postcentral gyrus medial segment,0.0,0.0
+147,Left MOrG medial orbital gyrus,0.0,0.0
+144,Right MOG middle occipital gyrus,0.0,0.0
+141,Left MFC medial frontal cortex,0.0,0.0
+140,Right MFC medial frontal cortex,0.0,0.0
+173,Left PIns posterior insula,0.0,0.0
+172,Right PIns posterior insula,0.0,0.0
+168,Right PCu precuneus,0.0,0.0
+169,Left PCu precuneus,0.0,0.0
+161,Left OFuG occipital fusiform gyrus,0.0,0.0
+162,Right OpIFG opercular part of the inferior frontal gyrus,0.0,0.0
+163,Left OpIFG opercular part of the inferior frontal gyrus,0.0,0.0
+165,Left OrIFG orbital part of the inferior frontal gyrus,0.0,0.0
+157,Left OCP occipital pole,0.0,0.0
+160,Right OFuG occipital fusiform gyrus,0.0,0.0
+156,Right OCP occipital pole,0.0,0.0
+142,Right MFG middle frontal gyrus,0.0,0.0
+151,Left MPrG precentral gyrus medial segment,0.0,0.0
+150,Right MPrG precentral gyrus medial segment,0.0,0.0
+175,Left PO parietal operculum,0.0,0.0
+176,Right PoG postcentral gyrus,0.0,0.0
+190,Right SFG superior frontal gyrus,0.0,0.0
+187,Left SCA subcallosal area,0.0,0.0
+186,Right SCA subcallosal area,0.0,0.0
+185,Left PT planum temporale,0.0,0.0
+184,Right PT planum temporale,0.0,0.0
+179,Left POrG posterior orbital gyrus,0.0,0.0
+180,Right PP planum polare,0.0,0.0
+181,Left PP planum polare,0.0,0.0
+174,Right PO parietal operculum,0.0,0.0
+197,Left SOG superior occipital gyrus,0.0,0.0
+192,Right SMC supplementary motor cortex,0.0,0.0
+194,Right SMG supramarginal gyrus,0.0,0.0
+196,Right SOG superior occipital gyrus,0.0,0.0
+204,Right TrIFG triangular part of the inferior frontal gyrus,0.0,0.0
+205,Left TrIFG triangular part of the inferior frontal gyrus,0.0,0.0
+206,Right TTG transverse temporal gyrus,0.0,0.0

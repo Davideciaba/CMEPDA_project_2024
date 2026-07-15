@@ -27,10 +27,12 @@ class ROIAnalyzer:
         return label_dict
 
     def extract_regional_importance(self, xai_map_path: str, atlas_map_path: str, 
-                                    label_csv_path: str, threshold: float = 0.0) -> pd.DataFrame:
+                                    label_csv_path: str, use_absolute: bool = True) -> pd.DataFrame:
         """
         Calculates the feature importance for each Region of Interest defined by the SPM Atlas.
         Filters out White Matter, Ventricles, and Cerebellum to focus on Gray Matter.
+        If use_absolute is True, computes metrics on absolute values (for magnitude/ranking).
+        If use_absolute is False, computes metrics on raw values (to keep signs for directional impact).
         """
         roi_dict = self._load_atlas_labels(label_csv_path)
         xai_img = nib.load(xai_map_path)
@@ -39,11 +41,18 @@ class ROIAnalyzer:
         xai_vol = xai_img.get_fdata()
         atlas_vol = np.round(atlas_img.get_fdata()).astype(int)
         
-        abs_xai = np.abs(xai_vol)
+        # Come specificato da Bloch, per valutare l'importanza globale prendiamo il valore assoluto
+        # Altrimenti, manteniamo i segni per vedere se la feature spinge verso l'AD o verso il CN
+        if use_absolute:
+            work_vol = np.abs(xai_vol)
+        else:
+            work_vol = xai_vol
+            
         results = []
         
         unique_atlas_ids = np.unique(atlas_vol)
         
+        # Filtriamo le regioni che non sono Gray Matter o non pertinenti
         exclude_keywords = [
             'white matter', 'wm', 'ventricle', 'vent', 'cerebellum', 'cerebellar', 
             'brain-stem', 'chiasm', 'vessel', 'csf', 'unknown', 'background'
@@ -60,7 +69,7 @@ class ROIAnalyzer:
                 continue
                 
             roi_mask = (atlas_vol == roi_id)
-            roi_values = abs_xai[roi_mask]
+            roi_values = work_vol[roi_mask]
             
             total_voxels = len(roi_values)
             if total_voxels == 0:
@@ -78,20 +87,23 @@ class ROIAnalyzer:
             
         df_results = pd.DataFrame(results)
         if not df_results.empty:
-            df_results = df_results.sort_values(by='Mean_ROI_Signal', ascending=False).reset_index(drop=True)
+            # Anche se manteniamo i segni, ordiniamo in base al valore assoluto per avere in cima
+            # le regioni più "forti" (più o meno)
+            df_results['abs_sort'] = df_results['Mean_ROI_Signal'].abs()
+            df_results = df_results.sort_values(by='abs_sort', ascending=False).drop(columns=['abs_sort']).reset_index(drop=True)
             
         return df_results
 
-    def aggregate_and_normalize_maps(self, map_paths: List[str], atlas_map_path: str, label_csv_path: str, metric: str = 'Mean_ROI_Signal') -> pd.DataFrame:
+    def aggregate_and_normalize_maps(self, map_paths: List[str], atlas_map_path: str, label_csv_path: str, metric: str = 'Mean_ROI_Signal', use_absolute: bool = True) -> pd.DataFrame:
         """
-        Estrae l'importanza regionale per una lista di mappe (es. i 5 fold), ne fa la media,
-        e poi normalizza i risultati tra 0 e 1 (Min-Max Scaling) come nell'articolo di Bloch.
+        Estrae l'importanza regionale per una lista di mappe (es. i 5 fold), ne fa la media.
+        Se use_absolute è True, normalizza i risultati tra 0 e 1 (Min-Max Scaling).
         """
         if not map_paths:
             self.logger.warning("Lista di mappe vuota fornita all'aggregatore.")
             return pd.DataFrame()
 
-        self.logger.info(f"Aggregazione e normalizzazione di {len(map_paths)} mappe per la metrica: {metric}...")
+        self.logger.info(f"Aggregazione di {len(map_paths)} mappe per la metrica: {metric} (Absolute: {use_absolute})...")
         
         all_series = []
         for path in map_paths:
@@ -99,9 +111,10 @@ class ROIAnalyzer:
                 self.logger.warning(f"File non trovato, lo salto: {path}")
                 continue
                 
-            df = self.extract_regional_importance(str(path), atlas_map_path, label_csv_path)
-            s = df.set_index('ROI_Name')[metric]
-            all_series.append(s)
+            df = self.extract_regional_importance(str(path), atlas_map_path, label_csv_path, use_absolute=use_absolute)
+            if not df.empty:
+                s = df.set_index('ROI_Name')[metric]
+                all_series.append(s)
             
         if not all_series:
             return pd.DataFrame()
@@ -110,32 +123,40 @@ class ROIAnalyzer:
         combined_df = pd.concat(all_series, axis=1)
         mean_series = combined_df.mean(axis=1)
         
-        # Normalizzazione Min-Max (0 - 1)
-        min_val = mean_series.min()
-        max_val = mean_series.max()
-        
-        if max_val > min_val:
-            norm_series = (mean_series - min_val) / (max_val - min_val)
+        if use_absolute:
+            # Normalizzazione Min-Max (0 - 1) per le Heatmap
+            min_val = mean_series.min()
+            max_val = mean_series.max()
+            if max_val > min_val:
+                norm_series = (mean_series - min_val) / (max_val - min_val)
+            else:
+                norm_series = mean_series * 0.0
+            result_df = norm_series.reset_index()
+            result_df.columns = ['ROI_Name', 'Normalized_Importance']
         else:
-            norm_series = mean_series * 0.0
+            # Ritorna la media con i segni originali per i Bar Plot divergenti
+            result_df = mean_series.reset_index()
+            result_df.columns = ['ROI_Name', metric]
             
-        result_df = norm_series.reset_index()
-        result_df.columns = ['ROI_Name', 'Normalized_Importance']
         return result_df
 
-    # ... [Manteniamo le funzioni _dcg, calculate_ndcg, compare_maps_ndcg identiche a prima] ...
     def _dcg(self, scores: np.ndarray) -> float:
         return np.sum(scores / np.log2(np.arange(2, len(scores) + 2)))
 
     def calculate_ndcg(self, predicted_scores: np.ndarray, true_scores: np.ndarray, k: int) -> float:
         if len(predicted_scores) == 0 or len(true_scores) == 0: return 0.0
-        pred_order = np.argsort(predicted_scores)[::-1]
+        # Ordiniamo gli indici in base ai punteggi reali (Ground Truth)
         ideal_order = np.argsort(true_scores)[::-1]
         ideal_scores = true_scores[ideal_order][:k]
         idcg = self._dcg(ideal_scores)
         if idcg == 0: return 0.0
+        
+        # Ordiniamo gli indici in base ai punteggi predetti (XAI)
+        pred_order = np.argsort(predicted_scores)[::-1]
+        # Prendiamo i valori "reali" ma ordinati secondo la XAI
         actual_scores = true_scores[pred_order][:k]
         dcg = self._dcg(actual_scores)
+        
         return dcg / idcg
 
     def compare_maps_ndcg(self, map1_df: pd.DataFrame, map2_df: pd.DataFrame, metric: str = 'Mean_ROI_Signal', k: int = 10) -> float:
