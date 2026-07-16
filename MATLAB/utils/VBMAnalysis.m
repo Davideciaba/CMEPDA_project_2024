@@ -221,7 +221,7 @@ classdef VBMAnalysis < handle
             if ~isempty(exportPath)
                 obj.PrivateLogger.info('Exporting thresholded map to: %s', exportPath);
                 try
-                    % Safely create parent directories
+                    % Safely create parent directory
                     [exportDir, ~, ~] = fileparts(exportPath);
                     if ~isempty(exportDir) && ~exist(exportDir, 'dir')
                         mkdir(exportDir);
@@ -235,9 +235,9 @@ classdef VBMAnalysis < handle
 
                     spm_write_vol(outHeader, thresholdedMap);
                     obj.PrivateLogger.success('NIfTI file exported successfully.');
-                catch writeME
+                catch ME
                     obj.PrivateLogger.error('Failed to export map to %s', exportPath);
-                    rethrow(writeME);
+                    rethrow(ME);
                 end
             end
         end

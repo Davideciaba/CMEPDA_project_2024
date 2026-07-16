@@ -1,0 +1,19 @@
+2026-07-16 11:26:33.100 | INFO     | VBMAnalysis:VBMAnalysis.getCorrectedMap:135 - Computing FWE correction (alpha = 0.050) for contrast: Atrophy: CTRL > AD
+2026-07-16 11:26:33.553 | SUCCESS  | VBMAnalysis:VBMAnalysis.getCorrectedMap:218 - Statistical threshold computed successfully: T > 5.198
+2026-07-16 11:26:33.634 | INFO     | VBMAnalysis:VBMAnalysis.twoSampleTTest:34 - Initializing SPM VBM Analysis...
+2026-07-16 11:26:42.599 | INFO     | VBMAnalysis:VBMAnalysis.twoSampleTTest:110 - SPM Batch successfully configured. Executing GLM...
+2026-07-16 11:29:21.246 | SUCCESS  | VBMAnalysis:VBMAnalysis.twoSampleTTest:115 - SPM GLM estimation completed successfully. Results saved in: C:\Users\utente\Desktop\Computing Methods\CMEPDA_project_2024\MATLAB\Mask_Comparison\Mask_Comparison_Results\Results\TPM_Mask_VBM_Results
+2026-07-16 11:29:21.571 | INFO     | VBMAnalysis:VBMAnalysis.getCorrectedMap:135 - Computing FWE correction (alpha = 0.050) for contrast: Atrophy: CTRL > AD
+2026-07-16 11:29:21.999 | SUCCESS  | VBMAnalysis:VBMAnalysis.getCorrectedMap:218 - Statistical threshold computed successfully: T > 5.208
+2026-07-16 11:29:22.209 | INFO     | VBMAnalysis:VBMAnalysis.evaluateMapSimilarity:297 - Similarity [Mean FWE Map] vs [TPM FWE Map]
+2026-07-16 11:29:22.255 | INFO     | VBMAnalysis:VBMAnalysis.evaluateMapSimilarity:298 - Active Voxels: Mean FWE Map = 5634 | TPM FWE Map = 5540 | Intersection: 5540 voxels
+2026-07-16 11:29:22.268 | INFO     | VBMAnalysis:VBMAnalysis.evaluateMapSimilarity:300 - Dice: 0.9916 | Jaccard: 0.9833
+2026-07-16 11:29:22.289 | INFO     | VBMAnalysis:VBMAnalysis.evaluateMapSimilarity:301 - Inclusion: 98.33% of Mean FWE Map is inside TPM FWE Map | 100.00% of TPM FWE Map is inside Mean FWE Map
+2026-07-16 11:29:22.312 | INFO     | VBMAnalysis:VBMAnalysis.evaluateMapSimilarity:303 - Pearson Corr in intersection: 1.0000
+2026-07-16 11:29:40.329 | INFO     | BrainRenderer:BrainRenderer.saveFigure:500 - Attempting to save figure to: C:\Users\utente\Desktop\Computing Methods\CMEPDA_project_2024\MATLAB\Mask_Comparison\Mask_Comparison_Results\Plots\VBM_Mean_Mask_FWE_005.png
+2026-07-16 11:29:49.219 | SUCCESS  | BrainRenderer:BrainRenderer.saveFigure:508 - Figure saved successfully.
+2026-07-16 11:30:03.361 | INFO     | BrainRenderer:BrainRenderer.saveFigure:500 - Attempting to save figure to: C:\Users\utente\Desktop\Computing Methods\CMEPDA_project_2024\MATLAB\Mask_Comparison\Mask_Comparison_Results\Plots\VBM_TPM_Mask_FWE_005_0.png
+2026-07-16 11:30:12.434 | SUCCESS  | BrainRenderer:BrainRenderer.saveFigure:508 - Figure saved successfully.
+2026-07-16 11:30:14.421 | INFO     | BrainRenderer:BrainRenderer.saveFigure:500 - Attempting to save figure to: C:\Users\utente\Desktop\Computing Methods\CMEPDA_project_2024\MATLAB\Mask_Comparison\Mask_Comparison_Results\Plots\Overlap_Mean_TPM_FWE_005.png
+2026-07-16 11:30:23.443 | SUCCESS  | BrainRenderer:BrainRenderer.saveFigure:508 - Figure saved successfully.
+2026-07-16 11:30:23.652 | SUCCESS  | RunMaskComparison:RunMaskComparison:352 - Mask Comparison successfully completed!

@@ -45,7 +45,7 @@ def compute_file_hash(filepath: pathlib.Path) -> str:
     return sha256.hexdigest()
 """
 
-def run_svm_classification():
+def run_svm_classification(enable_file_logging: bool = False):
     
     CURRENT_DIR = pathlib.Path(__file__).parent.resolve()
     PROJECT_DIR = CURRENT_DIR.parent.parent
@@ -53,9 +53,22 @@ def run_svm_classification():
 
     log = CustomLogger(name="SVMPipeline")
     log.add_console_handler(level="DEBUG", use_colors=True)
-    log_dir = CURRENT_DIR / "Log_Files"
-    log_path = log_dir / "SVMPipeline.log"
-    log.add_file_handler(log_path, level="DEBUG")
+
+    if enable_file_logging:
+        log_dir = CURRENT_DIR / "Log_Files"
+        log_dir.mkdir(parents=True, exist_ok=True)
+        log_path = log_dir / "SVMPipeline.log"
+        
+        try:
+            log.add_file_handler(str(log_path), level="DEBUG")
+            log.success(f"File logging initialized safely at: {log_path.name}")
+        except OSError as e:
+            log.critical(f"I/O ERROR: Cannot write to {log_path.name}")
+            log.critical("Pipeline aborted. Ensure you have write permissions.")
+            sys.exit(1)
+    else:
+        log.info("File logging globally disabled. Operating in Console-Only mode.")
+
     log.info("--- Booting Decoupled SVM Engine ---")
 
     registry_csv_path = SETUP_DIR / "python_registry.csv"

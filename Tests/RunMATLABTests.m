@@ -1,3 +1,4 @@
+function RunMATLABTests()
 %% RUNMATLABTESTS
 %   Automated Test Suite Runner for the MATLAB Framework
 %
@@ -6,31 +7,29 @@
 %   (e.g., adding the Logger utility) and executes all 
 %   Unit Tests in the \Tests directory.
 
-clear; close all;
+    % Define script and project paths
+    scriptPath = fileparts(mfilename('fullpath'));
+    projectRoot = fileparts(scriptPath);
 
-% Define script and project paths
-scriptPath = fileparts(mfilename('fullpath'));
-projectRoot = fileparts(scriptPath);
+    % Path to the Logger class
+    utilsPath = fullfile(projectRoot, 'MATLAB', 'utils');
 
-% Path to the Logger class
-utilsPath = fullfile(projectRoot, 'MATLAB', 'utils');
-
-fprintf('Configuring Test Environment...\n');
-try
+    fprintf('Configuring Test Environment...\n');
+    % Add utils path for utility functions
+    if ~isfolder(utilsPath)
+        error('Directory not found: %s', utilsPath);
+    end
     addpath(utilsPath);
-    fprintf('Utility paths injected\n');
-catch ME
-    error('MATLAB/utils directory not found. Tests will crash. Error: %s', ME.identifier);
+
+    % Run the Unit Tests
+    fprintf('Starting Unit Test Suite...\n');
+
+    % This command automatically finds and runs any test file in the \Tests
+    % folder
+    results = runtests(fullfile(projectRoot, 'Tests'));
+    disp(results);
+
+    % Remove path after tests
+    rmpath(utilsPath);
+    fprintf('Environment Restored\n');
 end
-
-% Run the Unit Tests
-fprintf('Starting Unit Test Suite...\n');
-
-% This command automatically finds and runs any test file in the \Tests
-% folder
-results = runtests(fullfile(projectRoot, 'Tests'));
-disp(results);
-
-% Remove path after tests
-rmpath(utilsPath);
-fprintf('Environment Restored\n');
