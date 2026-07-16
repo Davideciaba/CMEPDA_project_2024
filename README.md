@@ -1,12 +1,11 @@
-# CMEPDA Project 2024: Alzheimer's Disease ML vs DL Classification & Explainable AI
+# CMEPDA Project 2024: Alzheimer's Disease SVM Classification & Explainable AI
 
 [![Python](https://img.shields.io/badge/Python-3.11%2B-blue?logo=python&logoColor=white)](https://www.python.org/)
 [![MATLAB](https://img.shields.io/badge/MATLAB-SPM2025-orange?logo=mathworks)](https://it.mathworks.com/products/matlab.html)
 ![GitHub repo size](https://img.shields.io/github/repo-size/Davideciaba/CMEPDA_project_2024)
 ![CircleCI](https://circleci.com/gh/Davideciaba/CMEPDA_project_2024/tree/main.svg?style=shield)
 
-
-The aim of this repository is to build and train Machine Learning and Deep Learning models for an image-based medical classification, compare them with a VBM Analysis and. Specifically, we compare a Linear Support Vector Machine (SVM) and a 3D EfficientNet Convolutional Neural Network (CNN) for the classification of Alzheimer's Disease (AD) versus Healthy Controls (CTRL). Starting from 3D structural MRI, the models infer the clinical diagnosis with a strong emphasis on spatial interpretability and Explainable AI (XAI)[cite: 31]. This project is developed using a strictly synchronized hybrid architecture comprising both Python (OOP) and MATLAB scripts[cite: 31].
+The aim of this repository is to test the interpretative capabilities of two Explainable AI (XAI) approaches for Support Vector Machines (SVM) in the field of medical imaging, specifically for the classification of Alzheimer's Disease (AD) versus Healthy Controls (CTRL) using ADNI MRI datasets+. The two XAI approaches (Gaonkar and Haufe) are quantitatively compared against Voxel-Based Morphometry (VBM) analysis and raw SVM weights using NDCG ranking metrics aggregated over Regions of Interest (ROI). The computational framework is developed across MATLAB—ideal for medical image preprocessing via its toolboxes—and Python, which provides the flexibility needed to build the ML models and XAI frameworks.
 
 # Table of contents
 + [Prerequisites](#prerequisites)
@@ -15,16 +14,18 @@ The aim of this repository is to build and train Machine Learning and Deep Learn
 + [Model Building and Training](#model-building-and-training)
   + [VBM (The Ground Truth)](#vbm-the-ground-truth)
   + [Linear SVM & XAI](#linear-svm--xai)
-  + [3D Deep Learning & XAI](#3d-deep-learning--xai)
 + [Results & Evaluation](#results--evaluation)
+  + [Thresholding and ROI Aggregation](#thresholding-and-roi-aggregation)
+  + [Heat Map & Feature Importance](#heat-map--feature-importance)
 + [Usage](#usage)
++ [References](#references)
 
 # Prerequisites
-The project features a decoupled architecture, meaning the Python and MATLAB pipelines operate independently. If you only wish to execute the Python sections to evaluate the Linear Support Vector Machine (SVM) and the 3D EfficientNet models with the VBM Analysis, you can directly use the pre-computed MATLAB results already provided. Alternatively, the MATLAB sections can be executed natively within your MATLAB Desktop environment (or within your IDE with MATLAB extension).
+The project features a decoupled architecture, meaning the Python and MATLAB pipelines operate independently. If you only wish to execute the Python sections to evaluate the Linear Support Vector Machine (SVM) with the VBM Analysis, you can directly use the pre-computed MATLAB results already provided. Alternatively, the MATLAB sections can be executed natively within your MATLAB Desktop environment (or within your IDE with MATLAB extension).
 
 ## Python
 * **Environment**: The project requires Python 3.11 or higher.
-* **Dependencies**: Install the required Deep Learning and Machine Learning packages by running `pip install -r requirements.txt` in your virtual environment.
+* **Dependencies**: Install the required Machine Learning packages by running `pip install -r requirements.txt` in your virtual environment.
 * **SPM**: Even though the execution is decoupled, the Python environment requires the SPM path configuration. You must duplicate the provided `.env.example` file in the project's root directory, rename it to `.env`, and assign the absolute path of your local SPM folder to the `SPM_DIR` variable (e.g., `SPM_DIR=C:/path/to/spm`).
 
 ## MATLAB
@@ -32,11 +33,13 @@ The project features a decoupled architecture, meaning the Python and MATLAB pip
 * **Toolboxes**: The MATLAB pipeline requires the **Image Preprocessing Toolbox** and the **Statistics and Machine Learning Toolbox**. The codebase includes an automated Fail-Fast validator that will block execution if these licenses are missing.
 * **SPM**: The VBM Analysis requires SPM. Similarly to Python, you must duplicate the `config.example.json` file in the project's root directory, rename it to `config.json,` and set the `SPM_DIR` key to your local absolute SPM path (e.g., `{"SPM_DIR": "C:\\path\\to\\spm"}`).
 
-
-
 # Data & Preprocessing
-The input baseline consists of normalized, modulated, and smoothed Gray Matter (GM) 3D maps of AD and CTRL subjects, registered in the MNI space[cite: 31]. 
-All derived maps (VBM, SVM weights-map, SVM Haufe, SVM Gaonkar, DL IG) MUST strictly adhere to the same MNI grid[cite: 31]. To ensure voxel-perfect spatial alignment for downstream XAI evaluations, all maps are masked using an identical boolean GM Mask[cite: 31].
+The dataset utilized in this study stems from the Retico article, comprising 144 subjects affected by AD and 189 healthy controls. 
+Before model ingestion, the dataset underwent an extensive preprocessing pipeline governed by the DARTEL algorithm. The standardization steps included:
+* Tissue segmentation.
+* Generation of a study-specific template.
+* Warping of the template and the segmented maps into the standard MNI space.
+* Modulation of the volumes altered by spatial warping to preserve gray matter quantities.
 
 <div align="center">
 
@@ -47,59 +50,83 @@ All derived maps (VBM, SVM weights-map, SVM Haufe, SVM Gaonkar, DL IG) MUST stri
 </div>
 
 # Validation Framework
-The architecture is based on Object-Oriented Programming (OOP) in Python and Deep Learning modules are strictly Hardware-Agnostic (`device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')`)[cite: 31]. 
-The validation scheme relies on a Double Cross-Validation (Double CV) design[cite: 31]:
-* An Outer K-fold CV (default K=5) for evaluation[cite: 31].
-* An Inner K-fold CV (default K=5) for Hyperparameter Tuning[cite: 31].
+We trained a classical linear SVM model, aligning with the methodology proposed by Retico. To ensure robustness, the dataset was adapted using a Double Cross-Validation strategy:
+* **Outer 5-fold CV** for rigorous evaluation.
+* **Inner 5-fold CV** for hyperparameter tuning.
 
-To prevent data leakage, the Outer K-fold split is generated centrally by the Python Orchestrator, utilizing a stratification strategy based on the AD/CTRL labels[cite: 31]. 
-Data scaling is applied dynamically within each fold: `StandardScaler` (or `RobustScaler`) is used for the SVM, while `NormalizeIntensity` (or `ScaleIntensity`) is used for the CNN after calculating the custom mean and standard deviation of the current fold[cite: 31].
+For both inner and outer folds, classic predictive metrics are evaluated: Accuracy, Balanced Accuracy, AUROC, F1-Score, Sensitivity, and Specificity. 
+To strictly avoid **Data Leakage**, the scaler is calibrated exclusively on the training data (Inner and Outer Fold respectively) and subsequently applied to scale both the training and validation sets.
 
 # Model Building and Training
 
 ## VBM (The Ground Truth)
-The Voxel-Based Morphometry (VBM) analysis is utilized purely as an independent epidemiological gold standard[cite: 31].
-* **Environment:** Implemented in MATLAB with the SPM2025 toolkit, executed asynchronously via `matlab.engine` (Python orchestrated)[cite: 31]. All MATLAB scripts instantiate a custom Logger for Inter-Process Communication (IPC)[cite: 31].
-* **Methodology:** A General Linear Model (GLM) based on a Two-Sample T-test (AD vs CTRL) is computed over the entire dataset[cite: 31]. Age, Sex, and TIV are included as nuisance regressors[cite: 31].
-* **Output:** A Global VBM Mask thresholded using False Discovery Rate (FDR) correction[cite: 31].
+The Ground Truth is defined via VBM analysis, a method that allows determining regional differences in tissue volume (specifically, the gray matter of patients, which is the most affected by Alzheimer's) and evaluating the statistical contribution of each voxel to atrophy. 
+* **Methodology:** A General Linear Model based on a Two-Sample T-test is computed over the entire dataset, incorporating age, sex, and Total Intracranial Volume (TIV) as regressors.
+* **Output:** The output generates a Global VBM Mask. The threshold is determined via False Discovery Rate correction, combined with a specific TPM threshold.
 
 ## Linear SVM & XAI
-A Linear Support Vector Machine is trained on the flattened 3D GM maps using Scikit-Learn pipelines[cite: 31]. To bypass the biologically uninterpretable nature of standard SVM backward weights ($W$), we implemented advanced XAI algorithms[cite: 31]:
-* **Haufe Transformation:** We compute biological Activation Patterns $A$ via covariance: $A = Cov(X_{train}, \hat{s}) = \frac{1}{N_{train}-1} \sum_{n=1}^{N_{train}} X_{centr., n}^{T} \hat{s}_{centr., n}$[cite: 31].
-* **Gaonkar Transformation:** We employ Gaonkar's analytic representation to evaluate the decision patterns of the SVM without performing permutation tests[cite: 31]. This is designed for High-Dimension Low-Sample-Size (HDLSS) regimes (verifying $m/d < 0.2$ and `np.linalg.cond(K) < 10^{4}`)[cite: 31]. Exact p-values are computed and FWE-corrected[cite: 31].
+The core of the project focuses on interpretability methods, as the raw weights of the linear SVM (defined as the "backward model") assign high values to voxels acting as suppression variables, thereby masking crucial regions. To overcome these limitations, the training and XAI extraction pipelines have been completely decoupled.
 
-## 3D Deep Learning & XAI
-A `3D EfficientNet` architecture is implemented in PyTorch/TensorFlow[cite: 31].
-* **Training:** Includes a dynamic Early Stopping method in the Inner CV (based on `best_val_loss` and a `patience_counter`)[cite: 31]. The final model is calculated by applying Polyak-Ruppert Averaging on the parameters of the last N=5 epochs[cite: 31].
-* **Interpretability:** We use the Integrated Gradient (IG) algorithm with a zero-matrix baseline to interpret the 3D EfficientNet and extract subject-wise spatial attributions[cite: 31].
+### Model Building and Tuning
+* **Data Ingestion:** The input 3D NIfTI volumes are loaded using `nibabel` and masked via boolean vectorization, extracting valid voxels directly into a flattened 1D array to optimize computational performance.
+* **Pipeline Setup:** A `Linear SVM` is implemented using Scikit-Learn's `SVC` combined with a `StandardScaler` within a unified pipeline to prevent data leakage.
+* **Hyperparameter Tuning:** Inside each fold, hyperparameter optimization is performed using `GridSearchCV`. The scoring metric used to select the optimal model is `balanced_accuracy`.
+* **Serialization:** After executing the Nested CV, the best-fitted pipelines for each fold are saved to disk (`.joblib`) for independent XAI extraction.
+
+The hyperparameters explored during the grid search are shown in the following table:
+
+<div align="center">
+
+| Hyperparameter | Values |
+| -------------- | ------ |
+| `kernel`       | `linear` |
+| `class_weight` | `balanced`|
+| `C`            | `1e-4, 1e-3` |
+
+</div>
+
+### Spatial Interpretability (XAI)
+A standalone XAI orchestrator loads the pre-trained pipelines from disk and flanks the model with advanced mathematical transformations:
+* **Raw Weights:** Extracted directly from the SVM coefficients (`svc.coef_`).
+* **Haufe Transformation:** This transforms the "backward model" into a "forward model" by calculating the covariance between the scaled training variables and the decision function scores. This extracts Activation Patterns that isolate the actual neurophysiological distribution and gray matter variation.
+* **Gaonkar Transformation:** An analytic margin-aware transformation is applied to the weight vector, generating p-value maps that allow building a multivariate statistical inference complementary to VBM. It dynamically utilizes the optimal `C` parameter and the number of support vectors extracted from the trained model.
+
+Finally, the 1D arrays are reconstructed into 3D NIfTI volumes using the original spatial affine matrix and rendered as 3D activation maps over a reference background image (e.g., CTRL-117).
 
 # Results & Evaluation
-The predictive performances of both models are evaluated on the respective Outer Fold Test Sets[cite: 31]. To quantitatively measure this, we employ: Accuracy, AUROC, Balanced Accuracy (BACC), F1-Score, Sensitivity, and Specificity ($Mean \pm Std$)[cite: 31].
+The generated maps represent the general decision rules learned over the entire training set, making them inherently global. 
 
-## Heat Map
-As part of the analysis, we include the possibility to "visualize" what the model has learnt using a heat map, which highlights the regions of input images which are relevant in the decision making process. 
-To quantitatively evaluate whether the Machine Learning representations (SVM and DL) successfully captured the true biological variance (VBM ground truth), we employ the Normalized Discounted Cumulative Gain (NDCG) to evaluate the continuous ranking of voxel importance[cite: 31].
+## Thresholding and ROI Aggregation
+Before comparison, specific thresholds were applied to isolate relevant voxels based on the mathematical nature of the maps:
+* **Continuous Maps (Haufe and Raw Weights):** We selected the top 1% (99th percentile) and top 5% (95th percentile) of voxels with the highest intensity to isolate clusters with the greatest feature importance.
+* **Statistical Maps (Gaonkar):** Based on a strict statistical approach, we utilized an alpha = 0.05 for the Bonferroni method and q = 0.1 for the Benjamini-Yekutieli method (FDR).
 
-*Visual Comparison of XAI outputs (SVM vs CNN vs VBM):*
+To properly compare the various generated maps with the VBM (which visualizes local atrophy), we performed an aggregation within Regions of Interest (ROI) using the SPM Neuromorphometric atlas. 
+
+## Heat Map & Feature Importance
+The feature importance—used for the construction of global heatmaps and the correlation matrix based on the NDCG metric—is calculated by considering the **absolute value** of the attributions, as our global models generate both positive and negative attributes. 
+To preserve the original positive/negative signature for each region, these absolute maps are accompanied by **diverging bar plots**.
+
+*Visual Comparison of XAI outputs (SVM vs VBM):*
 <div align="center">
 <img src="Readme_images/heat_map.png" width="800"> 
 </div>
 
 # Usage
-We warmly invite the user to run the code on a GPU, because of its computational cost. 
 
 Clone this repository and run the main orchestrator using default parameters:
 ```bash
 cd CMEPDA_project_2024
 python main.py
 ```
-For the preprocessing part you need **Matlab** and the **Python** module **matlab.engine** installed. They are not included in the project's requirements but for **Matlab** you need the specific version 25.2
+
+For the preprocessing part you need **Matlab**, version 25.2, not included in the project's requirements. 
 # References
 
 The original dataset comes from the Alzheimer Dataset used in the following paper:
 - **Retico, A., Bosco, P., Cerello, P., Fiorina, E., Chincarini, A., & Fantacci, M. E.** (2014). Predictive Models Based on Support Vector Machines: Whole-Brain versus Regional Analysis of Structural MRI in the Alzheimer's Disease. Journal of Neuroimaging, 25(4), 552–563. [DOI](https://doi.org/10.1111/jon.12163).
 
-The Machine Learning Models and the Explainable-AI approaches comes from the following articles:
+The Machine Learning Model and the Explainable-AI approaches comes from the following articles:
 
 - **Haufe, S., Meinecke, F., Görgen, K., Dähne, S., Haynes, J.-D., Blankertz, B., & Bießmann, F.** (2014). On the interpretation of weight vectors of linear models in multivariate neuroimaging. NeuroImage, 87, 96–110. [DOI](http://dx.doi.org/10.1016/j.neuroimage.2013.10.067)
 
@@ -107,4 +134,4 @@ The Machine Learning Models and the Explainable-AI approaches comes from the fol
 
 - **Bloch, L., & Friedrich, C. M.** (2024). Systematic comparison of 3D Deep learning and classical machine learning explanations for Alzheimer's Disease detection. Scientific Reports, 14. [DOI](https://doi.org/10.1016/j.compbiomed.2024.108029)
 
-- **Di Wang, et al.** (2023). DL network heatmaps capture AD patterns reported in a large meta-analysis of neuroimaging studies. NeuroImage. [DOI](https://doi.org/10.1016/j.neuroimage.2023.119929.)
+- **Ridgway, G., Omar, R., Ourselin, S., Hill, D., Warren, J., & Fox, N.** (2009). Issues with threshold masking in voxel-based morphometry of atrophied brains. NeuroImage, 44(1), 99–111. [DOI](10.1016/j.neuroimage.2008.08.045)
