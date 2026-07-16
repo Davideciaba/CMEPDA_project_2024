@@ -15,3 +15,25 @@
 2026-07-14 13:14:52.413 | INFO     | efficientnet_classifier.py:execute_nested_cv:227 - Features - Early Stopping: True | SWA: True
 2026-07-14 13:14:52.420 | INFO     | efficientnet_classifier.py:execute_nested_cv:233 - --- Processing Outer Fold 1/5 ---
 2026-07-14 13:14:52.421 | DEBUG    | efficientnet_classifier.py:execute_nested_cv:255 - Grid Search Combo -> Opt:adamw, Sched:none, LR:0.0001, WD:0.001
+2026-07-15 22:54:52.484 | INFO     | run_efficientnet_classification.py:run_efficientnet_classification:31 - --- Booting 3D EfficientNet Engine ---
+2026-07-15 22:54:52.487 | INFO     | run_efficientnet_classification.py:run_efficientnet_classification:40 - Ingesting normalized registry for MONAI Dicts...
+2026-07-15 22:54:54.404 | SUCCESS  | run_efficientnet_classification.py:run_efficientnet_classification:51 - Data Loaded: 333 3D NIfTI pointers mapped.
+2026-07-15 22:54:54.404 | INFO     | run_efficientnet_classification.py:run_efficientnet_classification:54 - Loading Frozen Fold Artifact...
+2026-07-15 22:54:54.501 | SUCCESS  | run_efficientnet_classification.py:run_efficientnet_classification:70 - Security Signature validated. Fold integrity is 100% guaranteed.
+2026-07-15 22:54:54.502 | INFO     | run_efficientnet_classification.py:run_efficientnet_classification:73 - Executing CNN Double Cross Validation...
+2026-07-15 22:54:54.503 | INFO     | efficientnet_classifier.py:execute_nested_cv:226 - Starting EfficientNet Nested CV (Grid Search: 16 combinations).
+2026-07-15 22:54:54.503 | INFO     | efficientnet_classifier.py:execute_nested_cv:227 - Features - Early Stopping: True | SWA: True
+2026-07-15 22:54:54.503 | INFO     | efficientnet_classifier.py:execute_nested_cv:233 - --- Processing Outer Fold 1/5 ---
+2026-07-15 22:54:54.504 | DEBUG    | efficientnet_classifier.py:execute_nested_cv:255 - Grid Search Combo -> Opt:adamw, Sched:none, LR:0.0001, WD:0.001
+2026-07-15 23:03:01.224 | INFO     | run_efficientnet_classification.py:run_efficientnet_classification:31 - --- Booting 3D EfficientNet Engine ---
+2026-07-15 23:03:01.227 | INFO     | run_efficientnet_classification.py:run_efficientnet_classification:40 - Ingesting normalized registry for MONAI Dicts...
+2026-07-15 23:04:28.751 | INFO     | run_efficientnet_classification.py:run_efficientnet_classification:31 - --- Booting 3D EfficientNet Engine ---
+2026-07-15 23:04:28.751 | INFO     | run_efficientnet_classification.py:run_efficientnet_classification:40 - Ingesting normalized registry for MONAI Dicts...
+2026-07-15 23:04:30.391 | SUCCESS  | run_efficientnet_classification.py:run_efficientnet_classification:51 - Data Loaded: 333 3D NIfTI pointers mapped.
+2026-07-15 23:04:30.391 | INFO     | run_efficientnet_classification.py:run_efficientnet_classification:54 - Loading Frozen Fold Artifact...
+2026-07-15 23:04:30.391 | SUCCESS  | run_efficientnet_classification.py:run_efficientnet_classification:70 - Security Signature validated. Fold integrity is 100% guaranteed.
+2026-07-15 23:04:30.391 | INFO     | run_efficientnet_classification.py:run_efficientnet_classification:73 - Executing CNN Double Cross Validation...
+2026-07-15 23:04:30.391 | INFO     | efficientnet_classifier.py:execute_nested_cv:237 - Starting EfficientNet Nested CV (Grid Search: 16 combinations).
+2026-07-15 23:04:30.391 | INFO     | efficientnet_classifier.py:execute_nested_cv:238 - Features - Early Stopping: True | SWA: True
+2026-07-15 23:04:30.391 | INFO     | efficientnet_classifier.py:execute_nested_cv:244 - --- Processing Outer Fold 1/5 ---
+2026-07-15 23:04:30.391 | DEBUG    | efficientnet_classifier.py:execute_nested_cv:266 - Grid Search Combo -> Opt:adamw, Sched:none, LR:0.0001, WD:0.001
