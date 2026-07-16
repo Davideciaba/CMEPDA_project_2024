@@ -7,6 +7,7 @@ Multi-GPU DataParallel scaling, and decoupled atomic methods for training, valid
 
 Designed as a pure library module without global execution blocks.
 """
+import os
 import collections
 import copy
 import numpy as np
@@ -14,6 +15,7 @@ import pandas as pd
 import torch
 import pathlib
 from torch import nn, optim
+from torch.utils.data import Subset
 from typing import Dict, List, Tuple, Any
 from sklearn.metrics import (
     accuracy_score, 
@@ -26,7 +28,7 @@ from sklearn.metrics import (
 
 # MONAI Native Components
 from monai.networks.nets import EfficientNetBN
-from monai.data import DataLoader, Dataset
+from monai.data import DataLoader, CacheDataset
 from monai.transforms import (
     Compose, 
     LoadImaged, 
@@ -136,11 +138,10 @@ class EfficientNetClassifier:
             model = nn.DataParallel(model)
         return model.to(self.device)
 
-    def _create_dataloader(self, subset_dicts: List[Dict[str, Any]], batch_size: int, shuffle: bool, num_workers: int) -> DataLoader:
-        """Assembles a multi-threaded asynchronous MONAI stream iterator."""
-        pin_memory = True if self.device.type == 'cuda' else False
-        dataset = Dataset(data=subset_dicts, transform=self._get_transforms())
-        return DataLoader(dataset, batch_size=batch_size, shuffle=shuffle, num_workers=num_workers, pin_memory=pin_memory)
+    def _create_dataloader(self, dataset: torch.utils.data.Dataset, batch_size: int, shuffle: bool, num_workers: int = 0) -> DataLoader:
+        """Assembles a multi-threaded asynchronous MONAI stream iterator from a cached Dataset."""
+        # DIAGNOSTICA: Disabilitiamo forzatamente il pin_memory per aggirare il deadlock OS-level 
+        return DataLoader(dataset, batch_size=batch_size, shuffle=shuffle, num_workers=num_workers, pin_memory=False)
 
     def _configure_optimizer(self, model: nn.Module, opt_name: str, lr: float, wd: float) -> optim.Optimizer:
         """Dynamically configures the optimizer based on string name."""
@@ -169,8 +170,8 @@ class EfficientNetClassifier:
         epoch_loss = 0.0
         
         for batch_data in loader:
-            inputs = batch_data["image"].to(self.device, non_blocking=True)
-            labels = batch_data["label"].to(self.device, non_blocking=True)
+            inputs = batch_data["image"].to(self.device, non_blocking=False)
+            labels = batch_data["label"].to(self.device, non_blocking=False)
             
             optimizer.zero_grad()
             outputs = model(inputs)
@@ -189,8 +190,8 @@ class EfficientNetClassifier:
         
         with torch.no_grad():
             for batch_data in loader:
-                inputs = batch_data["image"].to(self.device, non_blocking=True)
-                labels = batch_data["label"].to(self.device, non_blocking=True)
+                inputs = batch_data["image"].to(self.device, non_blocking=False)
+                labels = batch_data["label"].to(self.device, non_blocking=False)
                 
                 outputs = model(inputs)
                 loss = criterion(outputs, labels)
@@ -218,7 +219,7 @@ class EfficientNetClassifier:
         
         with torch.no_grad():
             for batch_data in loader:
-                logits = model(batch_data["image"].to(self.device, non_blocking=True))
+                logits = model(batch_data["image"].to(self.device, non_blocking=False))
                 all_probs.extend(torch.softmax(logits, dim=1)[:, 1].cpu().numpy())
                 all_preds.extend(torch.argmax(logits, dim=1).cpu().numpy())
                 
@@ -227,7 +228,7 @@ class EfficientNetClassifier:
     def execute_nested_cv(self, data_dicts: List[Dict[str, Any]], y: np.ndarray, subjects: np.ndarray, 
                           cv_splits: List[Dict[str, Any]], batch_size: int = 2, max_epochs: int = 50, 
                           use_early_stopping: bool = True, use_swa: bool = True, 
-                          patience: int = 5, min_delta: float = 1e-3, swa_n: int = 5, 
+                          patience: int = 10, min_delta: float = 1e-4, swa_n: int = 5, 
                           num_workers: int = 2) -> Tuple[pd.DataFrame, List[Dict[str, Any]]]:
         """
         Orchestrates Deep Learning CV with Nested Grid Search.
@@ -236,6 +237,18 @@ class EfficientNetClassifier:
         total_combos = len(self.param_grid['lr']) * len(self.param_grid['wd']) * len(self.param_grid['optimizer']) * len(self.param_grid['scheduler'])
         self.logger.info(f"Starting EfficientNet Nested CV (Grid Search: {total_combos} combinations).")
         self.logger.info(f"Features - Early Stopping: {use_early_stopping} | SWA: {use_swa}")
+        
+        # --- PHASE 0: GLOBAL DETERMINISTIC CACHING ---
+        cache_threads = min(8, os.cpu_count() or 4)
+        self.logger.info(f"Building Global RAM Cache ({cache_threads} threads). Initial I/O setup in progress...")
+        
+        global_dataset = CacheDataset(
+            data=data_dicts,
+            transform=self._get_transforms(),
+            cache_rate=1.0,
+            num_workers=cache_threads
+        )
+        self.logger.info("Global Cache Build Complete. Zeroing DataLoader Workers for IPC safety.")
             
         fold_metrics_list, fold_artifacts = [], []
 
@@ -244,8 +257,6 @@ class EfficientNetClassifier:
             self.logger.info(f"--- Processing Outer Fold {fold_idx}/{len(cv_splits)} ---")
             
             train_idx, test_idx = split['outer_train_idx'], split['outer_test_idx']
-            train_dicts = [data_dicts[i] for i in train_idx]
-            test_dicts = [data_dicts[i] for i in test_idx]
             y_test = y[test_idx]
             inner_iterator = split['inner_splits_relative']
             
@@ -254,7 +265,6 @@ class EfficientNetClassifier:
             best_params = {'lr': None, 'wd': None, 'opt': None, 'sched': None}
             best_outer_target_epochs = max_epochs
 
-            # Telemetry for plotting inner folds
             optimal_inner_loss_history = {} 
             best_inner_bal_acc_mean = 0.0
 
@@ -269,11 +279,18 @@ class EfficientNetClassifier:
                             combo_best_epochs = []
                             combo_early_stopped = []
                             combo_bal_accs = []
-                            combo_loss_history = {} # Store history for this combo
+                            combo_loss_history = {} 
 
                             for inner_fold_idx, (in_tr_idx, in_val_idx) in enumerate(inner_iterator):
-                                in_tr_loader = self._create_dataloader([train_dicts[i] for i in in_tr_idx], batch_size, True, num_workers)
-                                in_val_loader = self._create_dataloader([train_dicts[i] for i in in_val_idx], batch_size, False, num_workers)
+                                # Map relative fold indices to absolute global indices for Dataset Subsets
+                                abs_in_tr_idx = [train_idx[i] for i in in_tr_idx]
+                                abs_in_val_idx = [train_idx[i] for i in in_val_idx]
+                                
+                                in_tr_ds = Subset(global_dataset, abs_in_tr_idx)
+                                in_val_ds = Subset(global_dataset, abs_in_val_idx)
+
+                                in_tr_loader = self._create_dataloader(in_tr_ds, batch_size, True, num_workers)
+                                in_val_loader = self._create_dataloader(in_val_ds, batch_size, False, num_workers)
 
                                 model_cv = self._prepare_model()
                                 optimizer_cv = self._configure_optimizer(model_cv, opt_name, lr, wd)
@@ -282,12 +299,12 @@ class EfficientNetClassifier:
                                 
                                 in_best_val_loss = float('inf')
                                 patience_counter = 0
-                                best_epoch = max_epochs # Default if ES not used
+                                best_epoch = max_epochs
                                 stopped = False
                                 history = {'train_loss': [], 'val_loss': []}
 
-                                # Sliding window buffer for Stochastic Weight Averaging
                                 swa_buffer = collections.deque(maxlen=swa_n)
+                                best_inner_state = None
 
                                 for epoch in range(max_epochs):
                                     tr_loss = self._train_epoch(model_cv, in_tr_loader, optimizer_cv, criterion_cv)
@@ -298,34 +315,42 @@ class EfficientNetClassifier:
                                         
                                     history['train_loss'].append(tr_loss)
                                     history['val_loss'].append(val_loss)
+                                    
+                                    # Console Telemetry
+                                    self.logger.info(f"Inner Fold {inner_fold_idx} | Epoch {epoch+1}/{max_epochs} | Tr Loss: {tr_loss:.4f} | Val Loss: {val_loss:.4f}")
 
-                                    if use_swa:
+                                    # --- DECOUPLED LOGIC: Absolute Best State Tracking ---
+                                    is_improvement = False
+                                    if val_loss < in_best_val_loss - min_delta:
+                                        is_improvement = True
+                                        in_best_val_loss = val_loss
+                                        best_epoch = epoch
+                                        patience_counter = 0
+                                        # Protect the optimal state dynamically
+                                        best_inner_state = copy.deepcopy(model_cv.state_dict())
+                                    else:
+                                        patience_counter += 1
+
+                                    # --- DECOUPLED LOGIC: Selective SWA Accumulation ---
+                                    if use_swa and is_improvement:
+                                        # Only store states that lower the validation error function
                                         swa_buffer.append(copy.deepcopy(model_cv.state_dict()))
 
-                                    if use_early_stopping:
-                                        if val_loss < in_best_val_loss - min_delta:
-                                            in_best_val_loss = val_loss
-                                            best_epoch = epoch
-                                            patience_counter = 0
-                                        else:
-                                            patience_counter += 1
+                                    if use_early_stopping and patience_counter >= patience:
+                                        stopped = True
+                                        break
 
-                                        if patience_counter >= patience:
-                                            stopped = True
-                                            break
-                                    else:
-                                        # If no early stopping, we just track the loss for the grid search comparison
-                                        in_best_val_loss = val_loss
-
-                                # End of Inner Fold Training
+                                # --- INNER FOLD RESTORATION PROTOCOL ---
                                 if use_swa and len(swa_buffer) > 0:
                                     avg_inner_state = self._average_weights(list(swa_buffer))
                                     model_cv.load_state_dict(avg_inner_state)
-                                    # Re-evaluate val_loss with SWA weights to make Grid Search decision
                                     in_best_val_loss = self._validate_epoch(model_cv, in_val_loader, criterion_cv)
+                                elif best_inner_state is not None:
+                                    # Fallback mechanism prevents restoring weights from patience stagnation
+                                    model_cv.load_state_dict(best_inner_state)
 
-                                # Calculate Inner Balanced Accuracy for this fold
-                                y_val_true = np.array([train_dicts[i]['label'] for i in in_val_idx])
+                                # Extract ground truth securely mapping global metadata
+                                y_val_true = np.array([data_dicts[train_idx[i]]['label'] for i in in_val_idx])
                                 y_val_pred, _ = self.predict(model_cv, in_val_loader)
                                 combo_bal_accs.append(balanced_accuracy_score(y_val_true, y_val_pred))
 
@@ -343,14 +368,12 @@ class EfficientNetClassifier:
                                 optimal_inner_loss_history = combo_loss_history
                                 best_inner_bal_acc_mean = float(np.mean(combo_bal_accs))
                                 
-                                # Determine Outer Target Epochs for this winning combo
                                 if use_early_stopping:
                                     majority_stopped = sum(combo_early_stopped) > (len(inner_iterator) / 2)
                                     if majority_stopped:
-                                        # Use the max of the best epochs (plus a tiny 10% buffer)
                                         base_epochs = max(combo_best_epochs)
+                                        # Safely pad the optimal epoch target for the Outer fold
                                         best_outer_target_epochs = int(round(base_epochs + 1 + base_epochs/10))
-                                        # Ensure we don't exceed max_epochs
                                         best_outer_target_epochs = min(best_outer_target_epochs, max_epochs)
                                     else:
                                         best_outer_target_epochs = max_epochs
@@ -360,8 +383,11 @@ class EfficientNetClassifier:
             self.logger.info(f"Optimal Grid Combo -> {best_params} | Target Epochs: {best_outer_target_epochs}")
 
             # --- PHASE 2: FINAL OUTER CV TRAINING (FULL TRAIN SET) ---
-            full_tr_loader = self._create_dataloader(train_dicts, batch_size, True, num_workers)
-            te_loader = self._create_dataloader(test_dicts, batch_size, False, num_workers)
+            full_tr_ds = Subset(global_dataset, train_idx)
+            te_ds = Subset(global_dataset, test_idx)
+            
+            full_tr_loader = self._create_dataloader(full_tr_ds, batch_size, True, num_workers)
+            te_loader = self._create_dataloader(te_ds, batch_size, False, num_workers)
 
             model = self._prepare_model()
             optimizer = self._configure_optimizer(model, best_params['opt'], best_params['lr'], best_params['wd'])
@@ -369,12 +395,10 @@ class EfficientNetClassifier:
             criterion = nn.CrossEntropyLoss()
             
             outer_swa_buffer = collections.deque(maxlen=swa_n)
-            outer_loss_history = {'train_loss': [], 'test_loss': []} # Track test loss purely for telemetry/plotting
+            outer_loss_history = {'train_loss': [], 'test_loss': []} 
             
             for epoch in range(best_outer_target_epochs):
                 tr_loss = self._train_epoch(model, full_tr_loader, optimizer, criterion)
-                
-                # Evaluate on test set just for the learning curves (NOT for early stopping)
                 te_loss = self._validate_epoch(model, te_loader, criterion)
                 
                 if scheduler:
@@ -396,10 +420,9 @@ class EfficientNetClassifier:
             
             metrics = self._evaluate_classification(y_test, y_pred, y_prob)
             metrics['Fold'] = fold_idx
-            metrics['Inner_CV_BalAcc_Mean'] = best_inner_bal_acc_mean # Added for pipeline aggregation
+            metrics['Inner_CV_BalAcc_Mean'] = best_inner_bal_acc_mean
             fold_metrics_list.append(metrics)
             
-            # Save comprehensive artifacts for ModelRenderer
             fold_artifacts.append({
                 'fold_id': fold_idx, 
                 'optimal_params': best_params,
@@ -408,10 +431,10 @@ class EfficientNetClassifier:
                 'y_true': y_test, 
                 'y_pred': y_pred, 
                 'y_prob': y_prob,
-                'roc_fpr': fpr, # Added for ROC plotting
-                'roc_tpr': tpr, # Added for ROC plotting
-                'inner_loss_history': optimal_inner_loss_history, # Added for plotting
-                'outer_loss_history': outer_loss_history # Added for plotting
+                'roc_fpr': fpr, 
+                'roc_tpr': tpr,
+                'inner_loss_history': optimal_inner_loss_history, 
+                'outer_loss_history': outer_loss_history 
             })
 
         self.logger.info("EfficientNet Nested CV Evaluation Completed.")
