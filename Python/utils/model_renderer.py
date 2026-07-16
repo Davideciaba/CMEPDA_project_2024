@@ -8,8 +8,10 @@ providing robust, stateful methods for exporting publication-ready MLOps graphic
 import math
 import pathlib
 import numpy as np
+import pandas as pd
 import nibabel as nib
 import matplotlib.pyplot as plt
+import seaborn as sns
 from matplotlib.colors import Normalize
 from sklearn.metrics import auc
 from typing import List, Dict, Any, Tuple
@@ -404,5 +406,131 @@ class ModelRenderer:
             fig.savefig(out_path, facecolor='black', edgecolor='none')
         except Exception as e:
             self.logger.error(f"Failed to save 3D map plot: {e}")
+        finally:
+            plt.close(fig)
+
+    def plot_top_rois(self, df: pd.DataFrame, score_col: str, title: str, filename: str, top_k: int = 20) -> None:
+        """
+        Crea e salva un grafico a barre orizzontali delle Top K regioni.
+        """
+        self.logger.info(f"Generazione del grafico Top {top_k} per {title}...")
+        
+        df_sorted = df.sort_values(by=score_col, ascending=False).head(top_k)
+        df_sorted = df_sorted.iloc[::-1]
+        
+        fig, ax = plt.subplots(figsize=(12, 8), dpi=150)
+        color = 'lightcoral'
+        
+        ax.barh(df_sorted['ROI_Name'], df_sorted[score_col], color=color, edgecolor='black')
+        
+        ax.set_xlabel(f'Feature Importance ({score_col})')
+        ax.set_ylabel('Brain Regions (Gray Matter)')
+        ax.set_title(f'Top {top_k} Regions - {title}', fontsize=14)
+        ax.grid(axis='x', linestyle='--', alpha=0.7)
+        
+        out_path = self.output_dir / filename
+        out_path.parent.mkdir(parents=True, exist_ok=True)
+        try:
+            fig.tight_layout()
+            fig.savefig(out_path, dpi=300)
+            self.logger.success(f"Top ROIs plot saved to: {out_path.name}")
+        except Exception as e:
+            self.logger.error(f"Failed to save Top ROIs plot: {e}")
+        finally:
+            plt.close(fig)
+
+    def plot_diverging_bars(self, df: pd.DataFrame, score_col: str, title: str, filename: str, top_k: int = 20) -> None:
+        """
+        Crea un grafico a barre divergenti per mostrare l'impatto direzionale.
+        """
+        self.logger.info(f"Generazione Diverging Bar Chart per {title}...")
+        
+        df_copy = df.copy()
+        df_copy['Abs_Score'] = df_copy[score_col].abs()
+        df_sorted = df_copy.sort_values(by='Abs_Score', ascending=False).head(top_k)
+        df_sorted = df_sorted.iloc[::-1]
+        
+        fig, ax = plt.subplots(figsize=(12, 8), dpi=150)
+        
+        colors = ['indianred' if x > 0 else 'steelblue' for x in df_sorted[score_col]]
+        
+        ax.barh(df_sorted['ROI_Name'], df_sorted[score_col], color=colors, edgecolor='black')
+        ax.axvline(0, color='black', linewidth=1)
+        
+        ax.set_xlabel('Mean ROI Weight (Directional Impact)')
+        ax.set_ylabel('Brain Regions (Gray Matter)')
+        ax.set_title(f'Top {top_k} Directional Impact - {title}', fontsize=14)
+        ax.grid(axis='x', linestyle='--', alpha=0.5)
+        
+        out_path = self.output_dir / filename
+        out_path.parent.mkdir(parents=True, exist_ok=True)
+        try:
+            fig.tight_layout()
+            fig.savefig(out_path, dpi=300)
+            self.logger.success(f"Diverging Bars plot saved to: {out_path.name}")
+        except Exception as e:
+            self.logger.error(f"Failed to save Diverging Bars plot: {e}")
+        finally:
+            plt.close(fig)
+
+    def plot_bloch_style_heatmap(self, df_matrix: pd.DataFrame, filename: str, title_suffix: str = "") -> None:
+        """
+        Genera una heatmap stile Bloch per confrontare la Feature Importance su tutti i fold.
+        """
+        self.logger.info(f"Generazione della Heatmap Comparativa (Stile Bloch) - {title_suffix}...")
+        
+        fig, ax = plt.subplots(figsize=(16, 14), dpi=150)
+        
+        sns.heatmap(df_matrix, cmap='Blues', annot=False, 
+                    cbar_kws={'label': 'Normalized Feature Importance (|Mean ROI|)'},
+                    linewidths=.5, linecolor='lightgray', ax=ax)
+        
+        ax.set_title(f'Global Feature Importances across Models ({title_suffix})', fontsize=16, pad=20)
+        ax.set_ylabel('Aspects and Features (Regions of Interest)', fontsize=14)
+        ax.set_xlabel('Models and Explanation Methods', fontsize=14)
+        
+        ax.xaxis.tick_top()
+        ax.xaxis.set_label_position('top')
+        plt.setp(ax.get_xticklabels(), rotation=45, ha='left')
+        
+        out_path = self.output_dir / filename
+        out_path.parent.mkdir(parents=True, exist_ok=True)
+        try:
+            fig.tight_layout()
+            fig.savefig(out_path, dpi=300)
+            self.logger.success(f"Heatmap salvata in: {out_path.name}")
+        except Exception as e:
+            self.logger.error(f"Failed to save Heatmap: {e}")
+        finally:
+            plt.close(fig)
+
+    def plot_ndcg_matrix(self, ndcg_matrix: pd.DataFrame, filename: str, title_suffix: str = "") -> None:
+        """
+        Genera una matrice di correlazione nDCG all-to-all tra i metodi basata sulla Feature Importance.
+        """
+        self.logger.info(f"Generazione della Matrice nDCG - {title_suffix}...")
+        
+        fig, ax = plt.subplots(figsize=(10, 8), dpi=150)
+        
+        sns.heatmap(ndcg_matrix, cmap='Blues', annot=True, fmt=".2f", vmin=0.0, vmax=1.0,
+                         cbar_kws={'label': 'nDCG Score'}, linewidths=.5, linecolor='lightgray', ax=ax)
+        
+        ax.set_title(f'nDCG Similarity Matrix ({title_suffix})', fontsize=16, pad=20)
+        ax.set_ylabel('Reference Method', fontsize=12)
+        ax.set_xlabel('Comparison Method', fontsize=12)
+        
+        ax.xaxis.tick_top()
+        ax.xaxis.set_label_position('top')
+        plt.setp(ax.get_xticklabels(), rotation=45, ha='left')
+        plt.setp(ax.get_yticklabels(), rotation=0)
+        
+        out_path = self.output_dir / filename
+        out_path.parent.mkdir(parents=True, exist_ok=True)
+        try:
+            fig.tight_layout()
+            fig.savefig(out_path, dpi=300)
+            self.logger.success(f"Matrice nDCG salvata in: {out_path.name}")
+        except Exception as e:
+            self.logger.error(f"Failed to save Matrice nDCG: {e}")
         finally:
             plt.close(fig)
