@@ -228,7 +228,7 @@ class EfficientNetClassifier:
                           cv_splits: List[Dict[str, Any]], batch_size: int = 4, max_epochs: int = 50, 
                           use_early_stopping: bool = True, use_swa: bool = True, 
                           patience: int = 10, min_delta: float = 1e-4, swa_n: int = 5, 
-                          num_workers: int = 4) -> Tuple[pd.DataFrame, List[Dict[str, Any]]]:
+                          num_workers: int = 2) -> Tuple[pd.DataFrame, List[Dict[str, Any]]]:
         """
         Orchestrates Deep Learning CV with Nested Grid Search.
         Provides Modular toggles for Inner-Fold Early Stopping and SWA.

@@ -39,10 +39,10 @@ def run_efficientnet_classification():
     # 1. LOAD DATA
     log.info("Ingesting normalized registry for MONAI Dicts...")
     PARAM_DICT = {
-        'optimizer': ['adamw', 'sgd'], 
-        'scheduler': ['none', 'step'],
+        'optimizer': ['adamw'], 
+        'scheduler': ['none', 'exp'],
         'lr': [1e-4, 1e-2], 
-        'wd': [1e-3, 1e-2]
+        'wd': [1e-3]
     }
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     efficientnet_engine = EfficientNetClassifier(logger = log, device= device, param_grid=PARAM_DICT)
