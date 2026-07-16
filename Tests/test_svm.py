@@ -10,7 +10,7 @@ import numpy as np
 import pandas as pd
 import math
 from sklearn.svm import SVC
-
+from sklearn.pipeline import Pipeline
 from Python.Models.svm_classifier import SVMClassifier
 from Python.utils.py_logger import CustomLogger
 
@@ -54,13 +54,17 @@ class TestSVMEngine(unittest.TestCase):
         test_indices = np.array([5, 6, 7, 8, 9, 15, 16, 17, 18, 19])
         dummy_inner_cv = [(train_indices, test_indices)]
              
-        # FIX UNPACKING: Il metodo ora restituisce 4 valori
+       # FIX UNPACKING: Il metodo ora restituisce 4 valori
         best_c, mean_cv, std_cv, best_model = self.engine.train(X_train, y_train, inner_cv_iterator=dummy_inner_cv)
                  
         self.assertIn(best_c, [0.1, 1.0])
-        self.assertIsInstance(best_model, SVC)
+        
+        # FIX ASSERTION: Il modello addestrato è una Pipeline (Scaler + SVC), non un SVC nudo.
+        self.assertIsInstance(best_model, Pipeline)
+        self.assertIsInstance(best_model.named_steps['svc'], SVC)
 
     def test_predict_method(self):
+        """Validates the pure inference API structure and array returns."""
         """Validates the pure inference API structure and array returns."""
         mock_model = MagicMock(spec=SVC)
         mock_model.predict.return_value = np.array([0, 1, 1])
