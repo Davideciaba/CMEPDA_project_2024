@@ -1,12 +1,15 @@
-# CMEPDA Project 2024: Alzheimer's Disease 3D Classification & Explainable AI
+# CMEPDA Project 2024: Alzheimer's Disease ML vs DL Classification & Explainable AI
 
-[![Python](https://img.shields.io/badge/Python-3.10%2B-blue?logo=python&logoColor=white)](https://www.python.org/)
+[![Python](https://img.shields.io/badge/Python-3.11%2B-blue?logo=python&logoColor=white)](https://www.python.org/)
 [![MATLAB](https://img.shields.io/badge/MATLAB-SPM2025-orange?logo=mathworks)](https://it.mathworks.com/products/matlab.html)
-[![PyTorch](https://img.shields.io/badge/PyTorch-3D_DL-red?logo=pytorch)](https://pytorch.org/)
+![GitHub repo size](https://img.shields.io/github/repo-size/Davideciaba/CMEPDA_project_2024)
+![CircleCI](https://circleci.com/gh/Davideciaba/CMEPDA_project_2024/tree/main.svg?style=shield)
 
-The aim of this repository is to build and train Machine Learning and Deep Learning models for an image-based medical classification. Specifically, we compare a Linear Support Vector Machine (SVM) and a 3D EfficientNet Convolutional Neural Network (CNN) for the classification of Alzheimer's Disease (AD) versus Healthy Controls (CTRL). Starting from 3D structural MRI, the models infer the clinical diagnosis with a strong emphasis on spatial interpretability and Explainable AI (XAI)[cite: 31]. This project is developed using a strictly synchronized hybrid architecture comprising both Python (OOP) and MATLAB scripts[cite: 31].
+
+The aim of this repository is to build and train Machine Learning and Deep Learning models for an image-based medical classification, compare them with a VBM Analysis and. Specifically, we compare a Linear Support Vector Machine (SVM) and a 3D EfficientNet Convolutional Neural Network (CNN) for the classification of Alzheimer's Disease (AD) versus Healthy Controls (CTRL). Starting from 3D structural MRI, the models infer the clinical diagnosis with a strong emphasis on spatial interpretability and Explainable AI (XAI)[cite: 31]. This project is developed using a strictly synchronized hybrid architecture comprising both Python (OOP) and MATLAB scripts[cite: 31].
 
 # Table of contents
++ [Prerequisites](#prerequisites)
 + [Data & Preprocessing](#data--preprocessing)
 + [Validation Framework](#validation-framework)
 + [Model Building and Training](#model-building-and-training)
@@ -15,6 +18,21 @@ The aim of this repository is to build and train Machine Learning and Deep Learn
   + [3D Deep Learning & XAI](#3d-deep-learning--xai)
 + [Results & Evaluation](#results--evaluation)
 + [Usage](#usage)
+
+# Prerequisites
+The project features a decoupled architecture, meaning the Python and MATLAB pipelines operate independently. If you only wish to execute the Python sections to evaluate the Linear Support Vector Machine (SVM) and the 3D EfficientNet models with the VBM Analysis, you can directly use the pre-computed MATLAB results already provided. Alternatively, the MATLAB sections can be executed natively within your MATLAB Desktop environment (or within your IDE with MATLAB extension).
+
+## Python
+* **Environment**: The project requires Python 3.11 or higher.
+* **Dependencies**: Install the required Deep Learning and Machine Learning packages by running `pip install -r requirements.txt` in your virtual environment.
+* **SPM**: Even though the execution is decoupled, the Python environment requires the SPM path configuration. You must duplicate the provided `.env.example` file in the project's root directory, rename it to `.env`, and assign the absolute path of your local SPM folder to the `SPM_DIR` variable (e.g., `SPM_DIR=C:/path/to/spm`).
+
+## MATLAB
+* **Environment**: The VBM Analysis and the other MATLAB classes and functions have been tested on MATLAB 2025b.
+* **Toolboxes**: The MATLAB pipeline requires the **Image Preprocessing Toolbox** and the **Statistics and Machine Learning Toolbox**. The codebase includes an automated Fail-Fast validator that will block execution if these licenses are missing.
+* **SPM**: The VBM Analysis requires SPM. Similarly to Python, you must duplicate the `config.example.json` file in the project's root directory, rename it to `config.json,` and set the `SPM_DIR` key to your local absolute SPM path (e.g., `{"SPM_DIR": "C:\\path\\to\\spm"}`).
+
+
 
 # Data & Preprocessing
 The input baseline consists of normalized, modulated, and smoothed Gray Matter (GM) 3D maps of AD and CTRL subjects, registered in the MNI space[cite: 31]. 

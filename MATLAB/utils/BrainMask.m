@@ -216,31 +216,17 @@ classdef BrainMask < handle
             exportData = single(obj.Matrix);
             
             try
+                % Safely create parent directories
+                [folderPath, ~, ~] = fileparts(outPath);
+                if ~isempty(folderPath) && ~exist(folderPath, 'dir')
+                    mkdir(folderPath);
+                end
                 niftiwrite(exportData, outPath, obj.RefInfo.RawNiftiInfo);
                 obj.PrivateLogger.success('NIfTI file exported successfully.');
             catch ME
-                % Filtering for missing paths/folders and
-                % cannotOpenHeaderWrite niftirwite error
-                identifier = lower(ME.identifier);
-                if contains(identifier, 'file') || ...
-                   contains(identifier, 'path') || ...
-                   contains(identifier, 'folder') || ...
-                   contains(identifier, 'cannotopen')
-
-                    [folderPath, ~, ~] = fileparts(outPath);
-                    try
-                        % Fallback: Create parent directory and retry
-                        mkdir(folderPath);
-                        niftiwrite(exportData, outPath, obj.RefInfo.RawNiftiInfo);
-                        obj.PrivateLogger.success('Missing folder automatically created. NIfTI exported successfully.');
-                    catch fatalME
-                        obj.PrivateLogger.error('Fatal I/O error during NIfTI export fallback: %s', fatalME.identifier);
-                        rethrow(fatalME);
-                    end
-                else
-                    % Rethrow for unrelated bugs
-                    rethrow(ME);
-                end
+                % Rethrow for unrelated bugs
+                obj.PrivateLogger.error('Failed to export NIfTI file to %s', outPath);
+                rethrow(ME);  
             end
         end
     end

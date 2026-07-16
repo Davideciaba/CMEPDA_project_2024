@@ -1,4 +1,4 @@
-function RunVBMPipeline()
+function RunVBMPipeline(enableFileLogging, outputDir, inputDir, csvName)
 %% RUNVBMPIPELINE
 %   An object-oriented orchestrator script that executes a complete Voxel-Based 
 %   Morphometry (VBM) pipeline, from raw data ingestion to final statistical rendering.
@@ -10,11 +10,16 @@ function RunVBMPipeline()
 %   correction, and project the surviving significant clusters onto an 
 %   anatomical background.
 %
+%  ARGUMENTS:
+%   - enableFileLogging (logical): If true, write logs to disk. Default: false (console-only)
+%   - outputDir (char): Directory for all ouputs. If empty (''), defaults to the script's directory
+%   - inputDir (char): Directory containing NIfTI and CSV files. If empty (''), defaults to 
+%       'AD_CTRL' in the project root
+%   - csvName (char): Name of the CSV file in the inputDir. Defaults to 'covariateADCTRLsexAgeTIV.csv' 
+%
 %  DESCRIPTION:
-%   This script acts as the main entry point for the VBM analysis, 
-%   integrating the custom OOP framework (Logger, CohortData, BrainMask, 
-%   VBMAnalysis, and BrainRenderer). It begins by establishing a dual-destination 
-%   (Command Window and file) logging environment to ensure reproducibility 
+%   This script acts as the VBM analysis orchestrator. It begins by establishing
+%   a dual-destination (Command Window and file) logging environment to ensure reproducibility 
 %   and tracking. It utilizes the CohortData class to recursively scan for clinical
 %   CSVs and structural 3D NIfTI images, loading the entire dataset into memory.
 %   A BrainMask object is then instantiated to derive and export an explicit binary
@@ -24,19 +29,40 @@ function RunVBMPipeline()
 %   BrainRenderer handles the graphical projection of the significant atrophy clusters
 %   overlaid on a specific subject background volume (CTRL-117).
 
-    %% 1. Environment Initialization and Logging
+    arguments
+        enableFileLogging (1,1) logical = false
+        outputDir (1,:) char = ''
+        inputDir (1,:) char = ''
+        csvName (1,:) char = 'covariateADCTRLsexAgeTIV.csv'
+    end
+
+    %% Environment Initialization and Logging
 
     % Define the base paths and file names
     scriptPath = fileparts(mfilename('fullpath'));
     MATLABPath = fileparts(scriptPath);
     projectRoot = fileparts(MATLABPath);
     utilsPath = fullfile(MATLABPath, 'utils');
-    cohortPath = fullfile(projectRoot, 'AD_CTRL');
-    plotsDir = fullfile(scriptPath, 'Plots');
-    resultsDir = fullfile(scriptPath, 'Results');
-    logDir = fullfile(scriptPath, 'Log_Files');
+
+    % Determine cohort dir path
+    if isempty(inputDir)
+        cohortPath = fullfile(projectRoot, 'AD_CTRL');
+    else
+        cohortPath = inputDir;
+    end
+
+    % Determine output root
+    if isempty(outputDir)
+        outputRoot = scriptPath;
+    else
+        outputRoot = outputDir;
+    end
+    vbmBase = fullfile(outputRoot, 'VBM_Pipeline_Results');
+
+    plotsDir = fullfile(vbmBase, 'Plots');
+    resultsDir = fullfile(vbmBase, 'Results');
+    logDir = fullfile(vbmBase, 'Log_Files');
     logPath = fullfile(logDir, 'VBMPipeline.log');
-    csvFileName = 'covariateADCTRLsexAgeTIV.csv';
 
     % Add utils path for utility functions
     if ~isfolder(utilsPath)
@@ -44,30 +70,50 @@ function RunVBMPipeline()
     end
     addpath(utilsPath);
 
+    % Verify toolboxes
+    validateMatlabEnv();
+
+    % Purge existing output directories
+    resetDirectory(plotsDir);
+    resetDirectory(resultsDir);
+
     % Initialize the logger to track
     logger = Logger('VBMPipeline');
     logger.addConsoleHandler('level', 'DEBUG', 'useColors', true);
     logger.success('Console logging successfully initialized.');
 
-    % Make the file logging directory
-    if ~exist(logDir, 'dir')
-        mkdir(logDir);
-    end
+    if enableFileLogging
+        % Make the file logging directory
+        resetDirectory(logDir);
 
-    % Initialize file logger
-    try
-        logger.addFileHandler(char(logPath), 'level', 'DEBUG', 'rotation', 10000);
-        logger.success('File logging successfully initialized at: %s', logPath);
-    catch ME
-        % Since later modules require write access, we must abort
-        % to prevent delayed crashes
-        logger.critical('I/O ERROR: Cannot write to %s', logPath);
-        logger.critical('Pipeline aborted. Ensure you have write permissions for the project root.');
-        error('RunVBMPipeline:PermissionDenied', ...
-            'Write permission denied for directory: %s. \nError: %s', ...
-            logDir, ME.message);
+        % Initialize file logger
+        try
+            logger.addFileHandler(char(logPath), 'level', 'DEBUG', 'rotation', 10000);
+            logger.success('File logging successfully initialized at: %s', logPath);
+        catch ME
+            % Since later modules require write access, we must abort
+            % to prevent delayed crashes
+            logger.critical('I/O ERROR: Cannot write to %s', logPath);
+            error('RunVBMPipeline:PermissionDenied', ...
+                'Write permission denied for directory: %s. \nError: %s', ...
+                logDir, ME.message);
+        end
+    else
+        % Dummy write test for console-only mode
+        if ~exist(vbmBase, 'dir')
+            mkdir(vbmBase);
+        end
+        dummyFile = fullfile(vbmBase, '.dummy_write_test');
+        fid = fopen(dummyFile, 'w');
+        if fid == -1
+            logger.critical('I/O ERROR: Cannot write to the defined output space %s.', vbmBase);
+            logger.critical('Pipeline aborted. Ensure you have write permissions on this filesystem.');
+            error('RunVBMPipeline:PermissionDenied', 'Write permission denied for output directory.');
+        end
+        fclose(fid);
+        delete(dummyFile);
+        logger.info('Dummy write test passed. Filesystem allows writing. Operating in console-only mode.');
     end
-
     
     % Kill the logger when the function exits
     cleaner = onCleanup(@() delete(logger));
@@ -76,8 +122,7 @@ function RunVBMPipeline()
         spmDir = loadSpmEnvironment();
         logger.success('SPM environment loaded successfully mapped at: %s', spmDir);
     catch ME
-        logger.critical('FATAL: Could not resolve SPM dependency. Details: %s', ME.message);
-        error('RunVBMPipeline:SpmResolutionFailed', 'Pipeline aborted due to SPM environment failure.');
+        handleError(logger, 'FATAL: Could not resolve SPM dependency.', ME);
     end
     
     tpmPath = fullfile(spmDir, 'tpm', 'TPM.nii');
@@ -88,72 +133,87 @@ function RunVBMPipeline()
     end
 
 
-    %% 2. Data Loading and Grouping (CohortData)
-    logger.info('--- Phase 1: Data Loading and Grouping ---');
+    %% Data loading and grouping (CohortData)
+    logger.info('--- Phase 1: data loading and grouping ---');
 
-    % Initialize CohortData passing the root and the exact CSV name
-    myCohort = CohortData(cohortPath, csvFileName, logger);
+    try
+        % Initialize CohortData passing the root and the exact CSV name
+        myCohort = CohortData(cohortPath, csvName, logger);
 
-    % Use recursive search (**) to find that CSV and the NIfTI files
-    % in any subfolder
-    myCohort.scanDirectory(); 
+        % Use recursive search (**) to find that CSV and the NIfTI files
+        % in any subfolder
+        myCohort.scanDirectory(); 
 
-    % Load just scanned data into RAM
-    myCohort.loadData();
+        % Load just scanned data into RAM
+        myCohort.loadData();
 
-    % Extract spatial information (Niftiinfo, affine matrix and dimensions)
-    refInfo = myCohort.getReferenceInfo();
+        % Extract spatial information (Niftiinfo, affine matrix and dimensions)
+        refInfo = myCohort.getReferenceInfo();
+    catch ME
+        handleError(logger, 'FATAL: Data loading and grouping failed (CohortData).', ME)
+    end
 
-    %% 3. TPM Mask Generation and Export (BrainMask)
-    logger.info('--- Phase 2: TPM Mask Generation ---');
+    %% TPM mask generation and export (BrainMask)
+    logger.info('--- Phase 2: TPM mask generation ---');
 
-    % Initialize the class and compute TPM Mask
-    tpmMask = BrainMask(refInfo, logger);
-    absThreshold = 0.01;
-    tpmMask.computeTpmMask(tpmPath, absThreshold);
+    try
+        % Initialize the class and compute TPM Mask
+        tpmMask = BrainMask(refInfo, logger);
+        absThreshold = 0.01;
+        tpmMask.computeTpmMask(tpmPath, absThreshold);
 
-    % Show TPM Mask Stats
-    tpmMask.showMaskStats();
+        % Show TPM Mask Stats
+        tpmMask.showMaskStats();
 
-    % Export TPM Mask as NIfTI file
-    maskDir = fullfile(resultsDir, 'Explicit Mask');
-    tpmMaskPath = fullfile(maskDir, 'explicit_tpm_mask.nii');
-    tpmMask.exportToNifti(tpmMaskPath);
+        % Export TPM Mask as NIfTI file
+        tpmMaskPath = fullfile(resultsDir, 'explicit_tpm_mask.nii');
+        tpmMask.exportToNifti(tpmMaskPath);
+    catch ME
+        handleError(logger, 'FATAL: TPM mask generation or export failed (BrainMask)', ME);
+    end    
 
-    %% 4. VBM Analysis on TPM Mask (VBMAnalysis)
+    %% VBM analysis on TPM mask (VBMAnalysis)
 
     logger.info('--- Phase 3: VBM Analysis on TPM Mask ---');
 
-    % Initialize VBM Analysis class
-    vbmDir = fullfile(resultsDir, "VBM Results");
-    vbmModel = VBMAnalysis(logger);
-    contrastName = 'Atrophy: CTRL > AD';
-    correctionMode = 'FWE';
-    alpha = 0.05;
+    try
+        % Initialize VBM analysis class
+        vbmDir = fullfile(resultsDir, "VBM_Results");
+        vbmModel = VBMAnalysis(logger);
+        contrastName = 'Atrophy: CTRL > AD';
+        correctionMode = 'FWE';
+        alpha = 0.05;
 
-    % Start two sample t-test on TPM Mask
-    vbmModel.twoSampleTTest(vbmDir, myCohort, tpmMaskPath, 'AD', 'CTRL');
+        % Start two sample t-test on TPM Mask
+        vbmModel.twoSampleTTest(vbmDir, myCohort, tpmMaskPath, 'AD', 'CTRL');
 
-    % Extract and export the corrected map based on TPM Mask (Family-Wise Error at alpha = 0.05)
-    tpmFweMapPath = fullfile(resultsDir, 'Thresholded Maps', 'TPM_Mask_FWE_corrected_map.nii');
-    [tpmFweMap, tpmThresh] = vbmModel.getCorrectedMap(vbmDir, contrastName, alpha, correctionMode, tpmFweMapPath);
+        % Extract and export the corrected map based on TPM mask (Family-Wise Error at alpha = 0.05)
+        tpmFweMapPath = fullfile(resultsDir, 'TPM_Mask_FWE_corrected_map.nii');
+        [tpmFweMap, tpmThresh] = vbmModel.getCorrectedMap(vbmDir, contrastName, alpha, correctionMode, tpmFweMapPath);
+    catch ME
+        handleError(logger, 'VBM Analysis on TPM Mask failed (VBMAnalysis)', ME);
+    end
 
-    %% 5. Plot statistical results on a background volume (BrainRenderer)
+    %% Plot statistical results on a background volume (BrainRenderer)
 
     logger.info('--- Phase 4: Plot statistical results on a background volume ---');
 
-    % Use the subject CTRL-117 as background volume
-    CTRL117Volume = myCohort.getSubjVolume('CTRL-117');
+    try
+        % Use the subject CTRL-117 as background volume
+        CTRL117Volume = myCohort.getSubjVolume('CTRL-117');
 
-    % Set the variables for the plot
-    affineMat = refInfo.NumericMatrix;
-    sliceConfig = 3.0; % Auto-mode: 3mm step in MNI space
+        % Set the variables for the plot
+        affineMat = refInfo.NumericMatrix;
+        sliceConfig = 3.0; % Auto-mode: 3mm step in MNI space
 
-    % Plot the corrected map on CTRL-117
-    figTpmFwe = fullfile(plotsDir, 'VBM_TPM_Mask_FWE_p005.png');
-    renderer = BrainRenderer(logger);
-    renderer.plotStatisticalOverlay(tpmFweMap, tpmThresh, CTRL117Volume, affineMat,...
-            sliceConfig, contrastName, correctionMode, alpha,'TPM FWE Map', figTpmFwe);
+        % Plot the corrected map on CTRL-117
+        figTpmFwe = fullfile(plotsDir, 'VBM_TPM_Mask_FWE_005.png');
+        renderer = BrainRenderer(logger);
+        renderer.plotStatisticalOverlay(tpmFweMap, tpmThresh, CTRL117Volume, affineMat,...
+                sliceConfig, contrastName, correctionMode, alpha,'TPM FWE Map', figTpmFwe);
+    catch ME
+        handleError(logger, 'Plot VBM analysis on a background volume failed (BrainRenderer)', ME);
+    end
 
     logger.success('VBM Pipeline successfully completed!');
 end

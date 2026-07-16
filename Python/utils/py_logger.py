@@ -62,7 +62,7 @@ class CustomLogger:
         
         sink_id = logger.add(
             sys.stdout,
-            level="TRACE",  # "TRACE" prevents loguru from blocking low-level logs
+            level="TRACE",
             colorize=use_colors,
             format=self._get_format if use_colors else self._get_plain_format,
             filter=self._level_filter
@@ -80,7 +80,7 @@ class CustomLogger:
 
         sink_id = logger.add(
             filename,
-            level="TRACE",  # "TRACE" prevents loguru from blocking low-level logs
+            level="TRACE",
             colorize=False,
             format=self._get_plain_format,
             rotation=rot_val,

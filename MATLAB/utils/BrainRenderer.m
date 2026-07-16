@@ -385,7 +385,7 @@ classdef BrainRenderer < handle
             cb = colorbar(axColorbar, 'Location', 'west');
             cb.Color = 'w'; cb.Label.String = 't-value'; cb.Label.FontWeight = 'bold';
 
-            annotation('textbox', [0.01 0.01 0.98 0.05], 'String', sprintf(' %s | %s | %s at p-value < %.2f', contrastName, mapName, correctionMode, pValue), ...
+            annotation('textbox', [0.01 0.01 0.98 0.05], 'String', sprintf(' %s | %s | %s at alpha = %.2f', contrastName, mapName, correctionMode, pValue), ...
                 'Color', 'w', 'FontSize', 12, 'FontWeight', 'bold', 'EdgeColor', 'none', 'HorizontalAlignment', 'center', 'BackgroundColor', [0.2 0.2 0.2]);
             
             obj.saveFigure(hFig, outFigPath);
@@ -489,35 +489,25 @@ classdef BrainRenderer < handle
         function saveFigure(obj, figHandle, outPath)
             % HELPER: saveFigure
             % PURPOSE: Attempts to save a figure safely.
-
-            % If outPath is empty or '', should only show the figure
-            if isempty(outPath) || strlength(outPath) == 0, return; end
             
             % Ensure the figure is closed when the function ends
             cleanupObj = onCleanup(@() close(figHandle));
 
-            obj.PrivateLogger.info('Attempting to save figure to: %s', outPath);
-            try
-                exportgraphics(figHandle, outPath, 'Resolution', 300, 'BackgroundColor', figHandle.Color);
-                obj.PrivateLogger.success('Figure saved successfully.');
-            catch ME
-                % Filtering for missing paths/folders
-                identifier = lower(ME.identifier);
-                if contains(identifier, 'file') || ...
-                   contains(identifier, 'path') || ...
-                   contains(identifier, 'folder')
-
-                    [folderPath, ~, ~] = fileparts(outPath);
-                    try
-                        mkdir(folderPath);
-                        exportgraphics(figHandle, outPath, 'Resolution', 300, 'BackgroundColor', figHandle.Color);
-                        obj.PrivateLogger.success('Folder created and figure saved successfully.');
-                    catch fatalME
-                        obj.PrivateLogger.error('Failed to save figure fallback: %s', fatalME.identifier);
-                        rethrow(fatalME);
+            % If outPath is empty or '', should only show the figure
+            if isempty(outPath) || strlength(outPath) == 0
+                return;
+            else
+                obj.PrivateLogger.info('Attempting to save figure to: %s', outPath);
+                try
+                    % Safely create parent directory
+                    [outDir, ~, ~] = fileparts(outPath);
+                    if ~isempty(outDir) && ~exist(outDir, 'dir')
+                        mkdir(outDir);
                     end
-                else
-                    % Rethrow for unrelated bugs
+                    exportgraphics(figHandle, outPath, 'Resolution', 300, 'BackgroundColor', figHandle.Color);
+                    obj.PrivateLogger.success('Figure saved successfully.');
+                catch ME
+                    obj.PrivateLogger.error('Failed to save figure fallback: %s', ME.identifier);
                     rethrow(ME);
                 end
             end
