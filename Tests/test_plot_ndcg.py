@@ -7,21 +7,19 @@ import os
 # Aggiungi la root del progetto al path per gli import
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
-from Python.XAI.plot_ndcg import ROIPlotter
+from Python.XAI.plot_ndcg import XAIPlotter
 from Python.utils.py_logger import CustomLogger
 
-class TestROIPlotter(unittest.TestCase):
-
+class TestXAIPlotter(unittest.TestCase):
     def setUp(self):
         self.logger = CustomLogger(name="TestPlotter")
-        self.plotter = ROIPlotter(logger=self.logger)
+        self.plotter = XAIPlotter(logger=self.logger)
 
-    @patch('XAI.plot_ndcg.plt.savefig')
-    @patch('XAI.plot_ndcg.plt.show')
-    @patch('XAI.plot_ndcg.os.makedirs')
-    def test_plot_top_rois(self, mock_makedirs, mock_show, mock_savefig):
+    @patch('Python.XAI.plot_ndcg.plt.savefig')
+    @patch('Python.XAI.plot_ndcg.os.makedirs')
+    def test_plot_top_rois(self, mock_makedirs, mock_savefig):
         """Testa se la funzione di plotting genera correttamente il grafico senza errori."""
-        
+                 
         # Crea un DataFrame fittizio simile a quello restituito da ROIAnalyzer
         data = {
             'ROI_ID': [1, 2, 3],
@@ -32,14 +30,12 @@ class TestROIPlotter(unittest.TestCase):
         df = pd.DataFrame(data)
 
         # Testa il plot usando la metrica Mean
-        self.plotter.plot_top_rois(df, metric='Mean_ROI_Signal', top_k=2, out_path="fake_path.png")
-        
+        self.plotter.plot_top_rois(df, score_col='Mean_ROI_Signal', title='Test Plot', top_k=2, out_path="fake_path.png")
+                 
         # Verifica che il percorso sia stato creato
         mock_makedirs.assert_called_once()
         # Verifica che il file sia stato salvato
         mock_savefig.assert_called_once()
-        # Verifica che il grafico sia stato mostrato
-        mock_show.assert_called_once()
 
 if __name__ == '__main__':
     unittest.main()

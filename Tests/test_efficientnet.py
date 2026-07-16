@@ -16,22 +16,21 @@ from Python.Models.efficientnet_classifier import EfficientNetClassifier
 from Python.utils.py_logger import CustomLogger
 
 class TestCNNEngine(unittest.TestCase):
-    
+         
     def setUp(self):
         """Initializes the Engine in Dummy Mode to isolate PyTorch logic from disk limits."""
         self.logger = CustomLogger(name="TestCNN")
         self.logger.add_console_handler(level="INFO")
         self.device = torch.device("cpu")
-        
-        self.engine = EfficientNetClassifier(logger=self.logger, device=self.device, is_dummy=True)
-
+                 
+        self.engine = EfficientNetClassifier(logger=self.logger, device=self.device, param_grid={})
         self.data_dicts = [
             {"image": torch.randn(1, 64, 64, 64), "label": torch.tensor(0, dtype=torch.long)},
             {"image": torch.randn(1, 64, 64, 64), "label": torch.tensor(1, dtype=torch.long)}
         ]
-        
-        self.loader = self.engine._create_dataloader(self.data_dicts, batch_size=2, shuffle=False, num_workers=0, pin_memory=False, drop_last=False)
-        self.model = self.engine._prepare_model_for_parallelism()
+                 
+        self.loader = self.engine._create_dataloader(self.data_dicts, batch_size=2, shuffle=False, num_workers=0)
+        self.model = self.engine._prepare_model()
         self.optimizer = torch.optim.AdamW(self.model.parameters(), lr=1e-3)
         self.criterion = nn.CrossEntropyLoss()
 
@@ -59,11 +58,11 @@ class TestCNNEngine(unittest.TestCase):
     def test_predict_method(self):
         """Validates the pure inference API required for future XAI operations."""
         y_pred, y_prob = self.engine.predict(self.model, self.loader)
-        
+                 
         self.assertEqual(len(y_pred), 2)
         self.assertEqual(len(y_prob), 2)
         self.assertTrue(all(0.0 <= p <= 1.0 for p in y_prob))
-        
+             
     # I target dei patch puntano al percorso REALE del file in cui sono importati
     @patch('Python.Models.efficientnet_classifier.os.path.exists')
     @patch('Python.Models.efficientnet_classifier.pd.read_csv')
@@ -71,8 +70,8 @@ class TestCNNEngine(unittest.TestCase):
         """Mocks the OS file system to validate the generation of Lazy Loading pointers."""
         mock_exists.return_value = True
         mock_read_csv.return_value = pd.DataFrame({'subject_id': ['SUB_01'], 'file_path': ['fake.nii'], 'label': [1]})
-        
-        subjects, data_dicts, y_data = EfficientNetClassifier.load_data_dicts("dummy.csv")
+                 
+        subjects, data_dicts, y_data = EfficientNetClassifier.load_data("dummy.csv")
         self.assertEqual(data_dicts[0]["image"], "fake.nii")
 
     def test_execute_nested_cv_integration(self):
@@ -83,31 +82,33 @@ class TestCNNEngine(unittest.TestCase):
         with self.logger.context(session_id="CNN_Integration"):
             N_SAMPLES, D, H, W = 16, 64, 64, 64
             np.random.seed(42)
-            
+                         
             subjects = np.array([f"SUBJ_{i:03d}" for i in range(N_SAMPLES)])
             y_data = np.array([0] * (N_SAMPLES // 2) + [1] * (N_SAMPLES // 2))
             np.random.shuffle(y_data)
-            
+                         
             data_dicts = [{"image": torch.randn(1, D, H, W, dtype=torch.float32), "label": int(lbl)} for lbl in y_data]
-            
-            EfficientNetClassifier.CNN_LR_GRID = [1e-3]
-            EfficientNetClassifier.CNN_WD_GRID = [1e-4]
-            
+                         
+            self.engine.param_grid = {
+                'optimizer': ['adamw'], 
+                'scheduler': ['none'],
+                'lr': [1e-3], 
+                'wd': [1e-4]
+            }
+                         
             # Creazione di split CV fittizi per accontentare i requisiti del modulo
             dummy_cv_splits = [{
                 'fold': 1,
                 'outer_train_idx': np.arange(8),
                 'outer_test_idx': np.arange(8, 16),
-                'inner_splits_relative': [(np.arange(6), np.arange(6, 8))],
-                'final_train_idx_relative': np.arange(6),
-                'final_val_idx_relative': np.arange(6, 8)
+                'inner_splits_relative': [(np.arange(6), np.arange(6, 8))]
             }]
-            
+                         
             df_metrics, artifacts = self.engine.execute_nested_cv(
                 data_dicts, y_data, subjects, cv_splits=dummy_cv_splits,
                 batch_size=2, max_epochs=2, patience=1, num_workers=0
             )
-            
+                         
             self.assertIsInstance(df_metrics, pd.DataFrame)
             self.assertEqual(len(df_metrics), 1)
 

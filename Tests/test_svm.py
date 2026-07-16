@@ -63,22 +63,21 @@ class TestSVMEngine(unittest.TestCase):
         """Validates the pure inference API structure and array returns."""
         mock_model = MagicMock(spec=SVC)
         mock_model.predict.return_value = np.array([0, 1, 1])
-        mock_model.predict_proba.return_value = np.array([[0.9, 0.1], [0.2, 0.8], [0.3, 0.7]])
-        
+        mock_model.decision_function.return_value = np.array([-0.9, 0.8, 0.7])
+                 
         X_test = np.random.randn(3, 10) 
-        
+                 
         y_pred, y_prob = self.engine.predict(mock_model, X_test)
-        
+                 
         self.assertEqual(len(y_pred), 3)
         self.assertEqual(y_prob[1], 0.8, "Probability extraction failed to target the positive class.")
-
+             
     # Path aggiornati al namespace corretto
-    @patch('Python.Models.svm_classifier.os.path.exists')
-    def test_load_real_data_file_missing(self, mock_exists):
+    @patch('Python.Models.svm_classifier.pd.read_csv', side_effect=FileNotFoundError)
+    def test_load_real_data_file_missing(self, mock_read_csv):
         """Validates that the Engine correctly aborts if data files are missing."""
-        mock_exists.return_value = False
         with self.assertRaises(FileNotFoundError):
-            SVMClassifier.load_real_data("missing.csv", "missing_mask.nii")
+            SVMClassifier.load_data("missing.csv", "missing_mask.nii")
 
     @patch('Python.Models.svm_classifier.os.path.exists')
     @patch('Python.Models.svm_classifier.pd.read_csv')
@@ -91,13 +90,13 @@ class TestSVMEngine(unittest.TestCase):
             'file_path': ['fake1.nii', 'fake2.nii'], 
             'label': [1, 0]
         })
-        
+                 
         mock_img = MagicMock()
         mock_img.get_fdata.return_value = np.ones((10, 10, 10))
         mock_nib_load.return_value = mock_img
-        
-        subjects, X_data, y_data = SVMClassifier.load_real_data("dummy.csv", "mask.nii")
-        
+                 
+        subjects, X_data, y_data = SVMClassifier.load_data("dummy.csv", "mask.nii")
+                 
         self.assertEqual(X_data.shape, (2, 1000))
         self.assertEqual(len(subjects), 2)
         self.assertEqual(subjects[0], "SUB_01")
