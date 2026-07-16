@@ -38,7 +38,7 @@ class TestSVMEngine(unittest.TestCase):
         y_true = np.array([1, 1, 1, 1]) 
         y_pred = np.array([1, 1, 1, 1])
         y_decision = np.array([0.9, 0.8, 0.9, 0.85])
-        
+                 
         metrics = self.engine._evaluate_classification(y_true, y_pred, y_decision)
         self.assertTrue(math.isnan(metrics['AUROC']))
 
@@ -46,16 +46,17 @@ class TestSVMEngine(unittest.TestCase):
         """Ensures the decoupled training API correctly performs Grid Search and fitting."""
         X_train = np.random.randn(20, 10)
         y_train = np.array([0] * 10 + [1] * 10)
-    
+             
         self.engine.param_grid = {'C': [0.1, 1.0]}
-        
+                 
         # FIX: Indici di split bilanciati per garantire che l'SVM veda entrambe le classi
         train_indices = np.array([0, 1, 2, 3, 4, 10, 11, 12, 13, 14])
         test_indices = np.array([5, 6, 7, 8, 9, 15, 16, 17, 18, 19])
         dummy_inner_cv = [(train_indices, test_indices)]
-    
-        best_c, best_model = self.engine.train(X_train, y_train, inner_cv_iterator=dummy_inner_cv)
-        
+             
+        # FIX UNPACKING: Il metodo ora restituisce 4 valori
+        best_c, mean_cv, std_cv, best_model = self.engine.train(X_train, y_train, inner_cv_iterator=dummy_inner_cv)
+                 
         self.assertIn(best_c, [0.1, 1.0])
         self.assertIsInstance(best_model, SVC)
 
@@ -72,19 +73,17 @@ class TestSVMEngine(unittest.TestCase):
         self.assertEqual(len(y_pred), 3)
         self.assertEqual(y_prob[1], 0.8, "Probability extraction failed to target the positive class.")
              
-    # Path aggiornati al namespace corretto
+    # Rimosso il patch su 'os.path.exists'
     @patch('Python.Models.svm_classifier.pd.read_csv', side_effect=FileNotFoundError)
     def test_load_real_data_file_missing(self, mock_read_csv):
         """Validates that the Engine correctly aborts if data files are missing."""
         with self.assertRaises(FileNotFoundError):
             SVMClassifier.load_data("missing.csv", "missing_mask.nii")
 
-    @patch('Python.Models.svm_classifier.os.path.exists')
     @patch('Python.Models.svm_classifier.pd.read_csv')
     @patch('Python.Models.svm_classifier.nib.load')
-    def test_load_real_data_success(self, mock_nib_load, mock_read_csv, mock_exists):
+    def test_load_real_data_success(self, mock_nib_load, mock_read_csv):
         """Mocks the OS file system to validate structural 3D-to-1D flattening and parsing."""
-        mock_exists.return_value = True
         mock_read_csv.return_value = pd.DataFrame({
             'subject_id': ['SUB_01', 'SUB_02'], 
             'file_path': ['fake1.nii', 'fake2.nii'], 

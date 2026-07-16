@@ -24,6 +24,11 @@ class TestCNNEngine(unittest.TestCase):
         self.device = torch.device("cpu")
                  
         self.engine = EfficientNetClassifier(logger=self.logger, device=self.device, param_grid={})
+        
+        # Impedisce che 'LoadImaged' cerchi file su disco, permettendogli di digerire i tensori fittizi.
+        from monai.transforms import Compose, EnsureTyped
+        self.engine._get_transforms = lambda: Compose([EnsureTyped(keys=["image", "label"])])
+        
         self.data_dicts = [
             {"image": torch.randn(1, 64, 64, 64), "label": torch.tensor(0, dtype=torch.long)},
             {"image": torch.randn(1, 64, 64, 64), "label": torch.tensor(1, dtype=torch.long)}
@@ -63,12 +68,10 @@ class TestCNNEngine(unittest.TestCase):
         self.assertEqual(len(y_prob), 2)
         self.assertTrue(all(0.0 <= p <= 1.0 for p in y_prob))
              
-    # I target dei patch puntano al percorso REALE del file in cui sono importati
-    @patch('Python.Models.efficientnet_classifier.os.path.exists')
+    # Rimosso il patch su 'os.path.exists' poiché non è più utilizzato all'interno del metodo load_data
     @patch('Python.Models.efficientnet_classifier.pd.read_csv')
-    def test_load_data_dicts_mocked(self, mock_read_csv, mock_exists):
+    def test_load_data_dicts_mocked(self, mock_read_csv):
         """Mocks the OS file system to validate the generation of Lazy Loading pointers."""
-        mock_exists.return_value = True
         mock_read_csv.return_value = pd.DataFrame({'subject_id': ['SUB_01'], 'file_path': ['fake.nii'], 'label': [1]})
                  
         subjects, data_dicts, y_data = EfficientNetClassifier.load_data("dummy.csv")
