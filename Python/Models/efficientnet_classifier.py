@@ -12,6 +12,7 @@ import copy
 import numpy as np
 import pandas as pd
 import torch
+import pathlib
 from torch import nn, optim
 from typing import Dict, List, Tuple, Any
 from sklearn.metrics import (
@@ -62,9 +63,10 @@ class EfficientNetClassifier:
             self.logger.info(f"HPC Parallelization: Using {self.gpu_count} GPUs.")
 
     @staticmethod
-    def load_data(csv_path: str) -> Tuple[np.ndarray, List[Dict[str, Any]], np.ndarray]:
+    def load_data(csv_path: str, project_root: str = None) -> Tuple[np.ndarray, List[Dict[str, Any]], np.ndarray]:
         """
         Generates lightweight Dictionary pointers mapping strings to disk assets.
+        Dynamically fixes absolute paths if project_root is provided.
         """
         df = pd.read_csv(csv_path)
 
@@ -74,7 +76,16 @@ class EfficientNetClassifier:
             lbl = int(row['label'])
             subjects.append(str(row['subject_id']))
             y_list.append(lbl)
-            data_dicts.append({"image": row['file_path'], "label": lbl})
+            
+            # Fix absolute paths from other machines
+            raw_path = str(row['file_path']).replace('\\', '/')
+            if project_root and 'AD_CTRL' in raw_path:
+                rel_path = raw_path[raw_path.find('AD_CTRL'):]
+                final_path = str(pathlib.Path(project_root) / rel_path)
+            else:
+                final_path = raw_path
+                
+            data_dicts.append({"image": final_path, "label": lbl})
             
         return np.array(subjects), data_dicts, np.array(y_list)
 

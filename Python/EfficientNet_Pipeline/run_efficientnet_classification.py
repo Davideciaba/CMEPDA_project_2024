@@ -47,7 +47,7 @@ def run_efficientnet_classification():
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     efficientnet_engine = EfficientNetClassifier(logger = log, device= device, param_grid=PARAM_DICT)
 
-    subjects, data_dicts, y_full = efficientnet_engine.load_data(str(registry_csv_path))
+    subjects, data_dicts, y_full = efficientnet_engine.load_data(str(registry_csv_path), str(project_root))
     log.success(f"Data Loaded: {len(data_dicts)} 3D NIfTI pointers mapped.")
 
     # 2. LOAD & VALIDATE SSOT
