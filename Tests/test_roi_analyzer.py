@@ -37,9 +37,9 @@ class TestROIAnalyzer(unittest.TestCase):
         self.logger = CustomLogger(name="TestROI")
         self.analyzer = ROIAnalyzer(logger=self.logger)
 
-    @patch('XAI.roi_analyzer.os.path.exists')
-    @patch('XAI.roi_analyzer.nib.load')
-    @patch('XAI.roi_analyzer.pd.read_csv')
+    @patch('Python.XAI.roi_analyzer.os.path.exists')
+    @patch('Python.XAI.roi_analyzer.nib.load')
+    @patch('Python.XAI.roi_analyzer.pd.read_csv')
     def test_extract_regional_importance_with_filtering(self, mock_read_csv, mock_nib_load, mock_exists) -> None:
         """
         Tests the ROI extraction and the strict filtering of White Matter/Ventricles.
