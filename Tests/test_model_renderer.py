@@ -74,12 +74,6 @@ class TestModelRenderer(unittest.TestCase):
         with self.assertRaises(ValueError):
             self.renderer.plot_3d_activation_map("bg.nii", "stats.nii", "mask.nii", "Title", "out.png")
 
-    @patch('matplotlib.figure.Figure.savefig')
-    def test_plot_top_rois(self, mock_savefig) -> None:
-        """Test the generation of horizontal bar plots."""
-        self.renderer.plot_top_rois(self.base_df, score_col='Mean_ROI_Signal', title='Test Top', filename="fake.png")
-        mock_savefig.assert_called_once()
-
 
     @patch('matplotlib.figure.Figure.savefig')
     def test_bloch_heatmap(self, mock_savefig) -> None:

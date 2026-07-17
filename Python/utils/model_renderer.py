@@ -1,9 +1,8 @@
 """
 Module: model_renderer.py
 
-Houses the ModelRenderer class, analogous to MATLAB's BrainRenderer.m.
-It isolates all plotting libraries (matplotlib, seaborn) from the core mathematical engines,
-providing robust, stateful methods for exporting publication-ready MLOps graphics.
+Contains ModelRenderer class, analogous to MATLAB's BrainRenderer.m.
+It isolates all plotting libraries (matplotlib, seaborn) from the core mathematical engines
 """
 import math
 import pathlib
@@ -19,11 +18,10 @@ from Python.utils.py_logger import CustomLogger
 
 class ModelRenderer:
     """
-    Handles Graphics Visualization and Exporting for Python Models.
+    Handles graphics visualization and exporting for Python models.
     
     PURPOSE:
-        Isolates rendering logic to adhere strictly to the Single Responsibility Principle.
-        Acts as the central Engine for all visualizations (ROC, Learning Curves, 
+        Acts as the central engine for all visualizations (ROC Curve,
         3D Brain Overlays, and XAI Analytics).
     """
 
@@ -32,14 +30,11 @@ class ModelRenderer:
         Initializes the ModelRenderer object.
         
         Args:
-            logger (CustomLogger): CustomLogger instance for execution tracking.
+            logger (CustomLogger): Centralized logging instance.
             output_dir (str): Base directory path to save the rendered plots.
         """
         self.logger = logger
         self.output_dir = pathlib.Path(output_dir).resolve()
-        
-        # EAFP: Attempt to create the plots directory if it doesn't exist natively
-        self.output_dir.mkdir(parents=True, exist_ok=True)
 
     def plot_roc_curves(self, fold_artifacts: List[Dict[str, Any]], model_name: str, filename: str) -> None:
         """
@@ -119,127 +114,11 @@ class ModelRenderer:
         finally:
             plt.close(fig)  # Free RAM
 
-    def plot_inner_cv_losses(self, fold_artifacts: List[Dict[str, Any]], model_name: str, filename: str) -> None:
-        """
-        Plots Train and Validation Loss vs Epoch for the Inner Folds.
-        
-        PURPOSE:
-            Visualizes the hyperparameter tuning phase. Groups inner folds belonging 
-            to the same Outer Fold into a single subplot for comparative evaluation.
-            
-        Args:
-            fold_artifacts (List[Dict]): The artifacts list.
-            model_name (str): Label for the plot title.
-            filename (str): Name of the exported file.
-        """
-        self.logger.info(f"Rendering Inner CV Learning Curves for {model_name}...")
-        
-        num_outer_folds = len(fold_artifacts)
-        cols = 3
-        rows = math.ceil(num_outer_folds / cols)
-        
-        fig, axes = plt.subplots(rows, cols, figsize=(cols * 5, rows * 4), dpi=300)
-        axes = np.array(axes).flatten() # Flatten in case it's 2D
-        
-        for idx, artifact in enumerate(fold_artifacts):
-            ax = axes[idx]
-            fold_id = artifact['fold_id']
-            inner_history = artifact.get('inner_loss_history', {})
-            
-            if not inner_history:
-                ax.text(0.5, 0.5, 'No Inner History Found', ha='center', va='center')
-                continue
-                
-            # Define colors for inner folds to distinguish them
-            colors = plt.cm.viridis(np.linspace(0, 0.9, len(inner_history)))
-            
-            for inner_idx, (inner_name, hist) in enumerate(inner_history.items()):
-                epochs = range(1, len(hist['train_loss']) + 1)
-                ax.plot(epochs, hist['train_loss'], linestyle='--', color=colors[inner_idx], alpha=0.5, 
-                        label=f'In{inner_idx+1} Train' if idx == 0 else "")
-                ax.plot(epochs, hist['val_loss'], linestyle='-', color=colors[inner_idx], alpha=0.9,
-                        label=f'In{inner_idx+1} Val' if idx == 0 else "")
-            
-            ax.set_title(f"Outer Fold {fold_id}", fontsize=11, fontweight='bold')
-            ax.set_xlabel('Epochs')
-            ax.set_ylabel('Loss (CrossEntropy)')
-            ax.grid(True, linestyle=':', alpha=0.6)
-            
-        # Hide any unused subplots
-        for i in range(num_outer_folds, len(axes)):
-            axes[i].axis('off')
-            
-        fig.suptitle(f'Inner Grid Search Learning Curves - {model_name}', fontsize=16, fontweight='bold')
-        
-        # Add a single legend for the first subplot to avoid clutter
-        if len(inner_history) > 0:
-            axes[0].legend(fontsize=7, loc='upper right', ncol=2)
-
-        out_path = self.output_dir / filename
-        try:
-            fig.tight_layout()
-            fig.subplots_adjust(top=0.90) # Adjust for suptitle
-            fig.savefig(out_path)
-            self.logger.success(f"Inner CV Losses rendered: {out_path.name}")
-        except Exception as e:
-            self.logger.error(f"Failed to save Inner Losses plot: {e}")
-        finally:
-            plt.close(fig)
-
-    def plot_outer_cv_losses(self, fold_artifacts: List[Dict[str, Any]], model_name: str, filename: str) -> None:
-        """
-        Plots Train and Test Loss vs Epoch for every Outer Fold.
-        
-        PURPOSE:
-            Generates a single overarching plot displaying the final retraining phase 
-            for all outer folds to diagnose generalization and overfitting.
-            
-        Args:
-            fold_artifacts (List[Dict]): The artifacts list.
-            model_name (str): Label for the plot title.
-            filename (str): Name of the exported file.
-        """
-        self.logger.info(f"Rendering Outer CV Learning Curves for {model_name}...")
-        
-        fig, ax = plt.subplots(figsize=(10, 6), dpi=300)
-        colors = plt.cm.tab10(np.linspace(0, 1, len(fold_artifacts)))
-        
-        for idx, artifact in enumerate(fold_artifacts):
-            fold_id = artifact['fold_id']
-            outer_history = artifact.get('outer_loss_history', {})
-            
-            if not outer_history:
-                continue
-                
-            epochs = range(1, len(outer_history['train_loss']) + 1)
-            
-            ax.plot(epochs, outer_history['train_loss'], linestyle='--', color=colors[idx], alpha=0.6,
-                    label=f'Fold {fold_id} Train')
-            ax.plot(epochs, outer_history['test_loss'], linestyle='-', color=colors[idx], linewidth=2, alpha=0.9,
-                    label=f'Fold {fold_id} Test')
-            
-        ax.set_title(f'Final Retraining Learning Curves (Outer CV) - {model_name}', fontsize=14, fontweight='bold')
-        ax.set_xlabel('Epochs', fontsize=12)
-        ax.set_ylabel('Loss', fontsize=12)
-        ax.grid(True, linestyle=':', alpha=0.7)
-        ax.legend(bbox_to_anchor=(1.05, 1), loc='upper left', fontsize=9)
-        
-        out_path = self.output_dir / filename
-        try:
-            fig.tight_layout()
-            fig.savefig(out_path)
-            self.logger.success(f"Outer CV Losses rendered: {out_path.name}")
-        except Exception as e:
-            self.logger.error(f"Failed to save Outer Losses plot: {e}")
-        finally:
-            plt.close(fig)
-
     def _get_voxel_indices_from_mni(self, affine_mat: np.ndarray, slice_config: Any, tensor_size: Tuple[int, int, int], active_mask: np.ndarray) -> Tuple[List[int], List[float]]:
         """
         Translates a configuration into valid physical Z-axis array coordinates.
         
         PURPOSE:
-            Matches MATLAB's `BrainRenderer.getVoxelIndicesFromMni` exactly.
             Solves the linear equation system derived from the NIfTI affine matrix 
             to map real-world millimeters into Python array slicing indices.
             
@@ -252,15 +131,15 @@ class ModelRenderer:
         Returns:
             Tuple[List[int], List[float]]: Array indices for Z-axis, and their true MNI values.
         """
-        # Extract Affine parameters strictly for Z-axis (Index 2 in Python)
+        # Extract Affine parameters for Z-axis
         vox_center_xy = [round(tensor_size[0] / 2), round(tensor_size[1] / 2)]
         max_z = tensor_size[2] - 1
 
-        # Resolve Target MNI Coordinates via Duck Typing
+        # Resolve Target MNI Coordinates
         if isinstance(slice_config, (int, float)):
             step_mm = float(slice_config)
             
-            # Find active bounding box along Z-axis (Compress X and Y)
+            # Find active bounding box along Z-axi
             active_slices = np.any(active_mask, axis=(0, 1))
             active_idx = np.where(active_slices > 0)[0]
             
@@ -295,7 +174,7 @@ class ModelRenderer:
                 mni_array = np.arange(aligned_min, mni_max - (step_mm * 0.1), -step_mm)
 
         elif isinstance(slice_config, list) and len(slice_config) == 3:
-            # Interpreted securely as MATLAB's [start : step : stop]
+            # Interpreted as MATLAB's [start : step : stop]
             start_mm, step_mm, stop_mm = slice_config
 
             if (start_mm < stop_mm and step_mm < 0) or (start_mm > stop_mm and step_mm > 0):
@@ -356,22 +235,19 @@ class ModelRenderer:
         Extracts and plots 2D Axial slices from 3D NIfTI volumes.
         
         PURPOSE:
-            Replicates MATLAB's `BrainRenderer.plotStatisticalOverlay` in native Python.
             Overlays 'hot' colormap statistical maps on top of grayscale anatomical 
-            backgrounds, injecting transparency dynamically based on significance.
+            backgrounds, injecting transparency based on significance.
             
         Args:
             bg_nifti_path (str): Path to anatomical background volume (e.g. CTRL Subject).
             stats_nifti_path (str): Path to the XAI statistical map.
-            mask_nifti_path (str): Path to the Boolean Brain Mask.
+            mask_nifti_path (str): Path to the Brain Mask.
             map_title (str): Title for the generated figure.
             export_filename (str): Name of the file to save in the output_dir.
             threshold (float): Minimum absolute threshold for a voxel to be rendered.
             slice_config (Any): MNI slicing strategy configuration.
-            
-        Raises:
-            IOError: If any NIfTI file fails to load.
         """
+        # Load all NIfTI volumes for rendering
         try:
             bg_img = nib.load(bg_nifti_path)
             stats_img = nib.load(stats_nifti_path)
@@ -404,7 +280,7 @@ class ModelRenderer:
         fig = plt.figure(figsize=(cols * 3, rows * 3), dpi=150)
         fig.patch.set_facecolor('black')
         
-        # Global Coloring Logic
+        # Color logic
         vmax = np.max(np.abs(stats_data[mask_data]))
         if vmax == 0: vmax = 1.0
         if vmax <= threshold:
@@ -418,20 +294,20 @@ class ModelRenderer:
             # Explicitly create and attach the graphical axis for this specific slice
             ax = fig.add_subplot(rows, cols, idx + 1)
             
-            # --- Surgical 2D Axial Slice Extraction ---
+            # Axial slice extraction
             slice_bg = bg_data[:, :, vox_idx]
             slice_stats = stats_data[:, :, vox_idx]
                 
-            # Radiological Rotation
+            # Rotation
             slice_bg = np.rot90(slice_bg, k=1)
             slice_stats = np.rot90(slice_stats, k=1)
             
-            # Plot Background (Grayscale mapping)
+            # Plot Background (Grayscale)
             ax.imshow(slice_bg, cmap='gray')
             
-            # Plot Overlay (Hot colormap injection)
+            # Plot Overlay (Hot colormap)
             overlay_colors = cmap(norm(slice_stats))
-            # Alpha mask: Only show voxels exceeding the mathematical threshold
+            # Alpha mask: only show voxels exceeding the mathematical threshold
             alpha_layer = (np.abs(slice_stats) >= threshold).astype(float) * 0.75
             
             ax.imshow(overlay_colors, alpha=alpha_layer)
@@ -462,58 +338,18 @@ class ModelRenderer:
         finally:
             plt.close(fig)
 
-    def plot_top_rois(self, df: pd.DataFrame, score_col: str, title: str, filename: str, top_k: int = 20) -> None:
-        """
-        Creates a horizontal bar chart displaying the Top K most impactful regions.
-        
-        PURPOSE:
-            Visualizes Feature Importance magnitude in a ranked format based on absolute values.
-            
-        Args:
-            df (pd.DataFrame): Dataframe containing ROI metrics.
-            score_col (str): Column to sort and plot (e.g., 'Abs_Mean_ROI_Signal').
-            title (str): Plot title.
-            filename (str): Name of the exported file.
-            top_k (int): Number of top regions to display.
-        """
-        self.logger.info(f"Building {top_k} bar plot for {title}...")
-        
-        df_sorted = df.sort_values(by=score_col, ascending=False).head(top_k)
-        df_sorted = df_sorted.iloc[::-1]
-        
-        fig, ax = plt.subplots(figsize=(12, 8), dpi=150)
-        color = 'lightcoral'
-        
-        ax.barh(df_sorted['ROI_Name'], df_sorted[score_col], color=color, edgecolor='black')
-        
-        ax.set_xlabel(f'Feature Importance ({score_col})')
-        ax.set_ylabel('Brain Regions (Gray Matter)')
-        ax.set_title(f'Top {top_k} Regions - {title}', fontsize=14)
-        ax.grid(axis='x', linestyle='--', alpha=0.7)
-        
-        out_path = self.output_dir / filename
-        out_path.parent.mkdir(parents=True, exist_ok=True)
-        try:
-            fig.tight_layout()
-            fig.savefig(out_path, dpi=300)
-            self.logger.success(f"Top ROIs plot saved to: {out_path.name}")
-        except Exception as e:
-            self.logger.error(f"Failed to save Top ROIs plot: {e}")
-        finally:
-            plt.close(fig)
-
 
     def plot_heatmap(self, df_matrix: pd.DataFrame, filename: str, title_suffix: str = "") -> None:
         """
-        Generates a comparative Heatmap evaluating Feature Importance across models.
+        Generates a comparative Heatmap evaluating feature importance across models.
         
         PURPOSE:
             Replicates the visual analytic standard proposed by Bloch et al.
             Provides a global view to identify which anatomical features are 
-            consistently deemed important across different XAI algorithms.
+            consistently important across different XAI algorithms.
             
         Args:
-            df_matrix (pd.DataFrame): 2D Matrix of Normalized Feature Importances.
+            df_matrix (pd.DataFrame): 2D Matrix of normalized feature importances.
             filename (str): Name of the exported file.
             title_suffix (str): Contextual addition to the title.
         """
@@ -546,7 +382,7 @@ class ModelRenderer:
 
     def plot_ndcg_matrix(self, ndcg_matrix: pd.DataFrame, filename: str, title_suffix: str = "") -> None:
         """
-        Generates an All-to-All correlation matrix of nDCG scores between methods.
+        Generates a correlation matrix of nDCG scores between methods.
         
         PURPOSE:
             Quantifies ranking agreement. Demonstrates statistically if XAI methods 

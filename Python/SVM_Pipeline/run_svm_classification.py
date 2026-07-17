@@ -3,9 +3,8 @@ Module: run_svm_classification.py
 
 SVM Pipeline Orchestrator.
 
-Acts as the absolute entry point for the Linear SVM MLOps architecture.
 Coordinates the execution of preprocessing, loads the serialized data via nibabel, 
-injects structural synchronization via the CVManager, and triggers the SVM Double Cross-Validation.
+loads vc splits via the CVManager, and triggers the SVM Double Cross-Validation.
 """
 import sys
 from pathlib import Path
@@ -13,7 +12,6 @@ import pandas as pd
 import joblib
 from typing import Optional, List
 
-# Internal Module Imports
 from Python.utils.py_logger import CustomLogger
 from Python.utils.cv_manager import CVManager
 from Python.utils.tpm_mask_generator import TpmMaskGenerator
@@ -38,37 +36,33 @@ def run_svm_classification(
     Orchestrator of the Linear SVM for classification.
     
     PURPOSE:
-        Connects the analytical logic (SVMClassifier) to the disk operations (loading/saving).
-        Ensures strict matching of security signatures defined by cv_setup.
+        Performs the complete SVM classification pipeline
         
     Args:
         enable_file_logging (bool): If True, writes logs to disk.
         output_dir (Optional[Path]): Directory where results will be written.
         input_dir (Optional[Path]): Path to inputs.
-        csv_name (str): Expected registry filename.
+        csv_name (str): Expected clinical CSV filename.
         bypass_grid (bool): If True, skips search and tries to load previous C params.
         use_pretrained (bool): If True, aborts training and skips to rendering if models exist.
         c_values (List[float]): Grid space for hyperparameter tuning.
-        outer_folds (int): Folds for robust model evaluation.
-        inner_folds (int): Folds for grid search tuning.
-        
-    Raises:
-        SystemExit: For fatal errors in IO or security signature mismatches.
+        outer_folds (int): Number of outer folds
+        inner_folds (int): Number of inner folds
     """
     
+    # Path injection
     current_dir = Path(__file__).parent.resolve()
-    
     base_out = output_dir.resolve() if output_dir else current_dir
     common_setup_dir = base_out / "Common_Setup_Results"
     registry_csv_path = common_setup_dir / "cohort_registry.csv"
     folds_json_path = common_setup_dir / "cv_folds_registry.json"
-
     svm_base = base_out / "SVM_Classification_Results"
     results_dir = svm_base / "Results"
     plots_dir = svm_base / "Plots"
     log_dir = svm_base / "Log_Files"
     csv_out_path = results_dir / "SVM_CV_Metrics.csv"
 
+    # Logger initialization
     log = CustomLogger(name="SVMClassification")
     log.add_console_handler(level="DEBUG", use_colors=True)
 
@@ -99,6 +93,7 @@ def run_svm_classification(
     log.info("Phase 0: Resolving execution state and historical artifacts...")
     active_c_grid = {'C': c_values}
 
+    # Bypass Grid Search
     if bypass_grid:
         if csv_out_path.exists():
             try:
@@ -120,6 +115,7 @@ def run_svm_classification(
     log.info(f"GridSearch configuration: {num_combinations} combination(s) per inner fold.")
     log.info(f"Hyperparameters mapped for 'C': {active_c_grid['C']}")
 
+    # Load models if ecist
     if folds_json_path.exists():
         cv_splits_temp = CVManager.load_from_json(str(folds_json_path))
         expected_models = [results_dir / f"SVM_Model_Fold_{s['fold']}.joblib" for s in cv_splits_temp]
@@ -140,6 +136,7 @@ def run_svm_classification(
         reset_directory(results_dir, log)
         reset_directory(plots_dir, log)
 
+    # Fallback if setup not performed
     if not registry_csv_path.exists() or not folds_json_path.exists():
         log.warning("Common setup missing. Automatically triggering Setup (cv_setup)...")
         try:
@@ -157,6 +154,7 @@ def run_svm_classification(
     else:
         log.success("Valid common setup found. Bypassing setup phase.")
 
+    # Load SPM
     try:
         spm_dir = load_spm_environment()
         log.success(f"SPM environment loaded successfully mapped at: {spm_dir}")
@@ -204,6 +202,8 @@ def run_svm_classification(
             log.critical("FATAL: Memory misalignment detected! The loaded CSV does not match the JSON artifact.")
             sys.exit(1)
 
+    log.success('CV split registry successfully loaded')
+
     log.info("Phase 4: Executing SVM Double Cross Validation...")
     results_df, artifacts = svm_engine.execute_nested_cv(X_full, y_full, subjects, cv_splits)
     
@@ -240,6 +240,3 @@ def run_svm_classification(
         log.debug(f"Saved SVM Pipeline: {model_out_path.name}")
 
     log.success("--- SVM EXECUTION COMPLETE ---")
-
-if __name__ == "__main__":
-    run_svm_classification()

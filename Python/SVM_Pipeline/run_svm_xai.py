@@ -3,9 +3,8 @@ Module: run_svm_xai.py
 
 SVM XAI Orchestrator.
 
-Standalone execution script for extracting spatial interpretation patterns
-(Raw Weights, Haufe, Gaonkar) from pre-trained SVM models saved on disk.
-Guarantees decoupling from the training pipeline.
+Script for extracting spatial interpretation patterns
+(Raw Weights, Haufe, Gaonkar) from pre-trained SVM models.
 """
 import sys
 from pathlib import Path
@@ -30,7 +29,7 @@ def run_svm_xai(
     output_dir: Optional[Path] = None
 ) -> None:
     """
-    Executes the analytical extraction maps from the frozen Linear SVM pipeline.
+    Executes the analytical extraction maps from the saved Linear SVM models.
     
     PURPOSE:
         Reads pre-trained coefficients from disk and applies matrix algebra to 
@@ -38,28 +37,23 @@ def run_svm_xai(
         
     Args:
         enable_file_logging (bool): Writes logs to disk.
-        output_dir (Optional[Path]): Directory defining the base output environment.
-        
-    Raises:
-        SystemExit: If the foundational models or JSON topologies are missing.
+        output_dir (Optional[Path]): output directory
     """
-    
+    # Path injection
     current_dir = Path(__file__).parent.resolve()
     base_out = output_dir.resolve() if output_dir else current_dir
-
     common_setup_dir = base_out / "Common_Setup_Results"
     registry_csv_path = common_setup_dir / "cohort_registry.csv"
     folds_json_path = common_setup_dir / "cv_folds_registry.json"
     mask_path = common_setup_dir / "Mask" / "tpm_mask.nii"
-
     svm_base = base_out / "SVM_Classification_Results"
     svm_results_dir = svm_base / "Results"
-
     xai_base = base_out / "SVM_XAI_Results"
     xai_results_dir = xai_base / "Results"
     xai_plots_dir = xai_base / "Plots"
     xai_log_dir = xai_base / "Log_Files"
 
+    # Logger initialization
     log = CustomLogger(name="SVM_XAI_Pipeline")
     log.add_console_handler(level="DEBUG", use_colors=True)
 
@@ -90,11 +84,13 @@ def run_svm_xai(
     reset_directory(xai_results_dir, log)
     reset_directory(xai_plots_dir, log)
 
+    # Common setup needed
     if not registry_csv_path.exists() or not folds_json_path.exists():
         log.error("FATAL: Common Setup Results are missing.")
         log.error(f"Please run the setup phase first or ensure path is correct: {common_setup_dir}")
         sys.exit(1)
 
+    # Load cv splits
     try:
         cv_splits = CVManager.load_from_json(str(folds_json_path))
         num_outer_folds = len(cv_splits)
@@ -130,6 +126,7 @@ def run_svm_xai(
     else:
          log.success("Valid Cached TPM Mask found. Bypassing Generation.")
 
+    # Use SVMClassifier to load data with cohort registry
     log.info("Phase 2: Loading cohort registry and TPM Mask...")
     svm_engine = SVMClassifier(logger=log, param_grid={})
     _, X_full, y_full = svm_engine.load_data(str(registry_csv_path), str(mask_path))
@@ -167,16 +164,16 @@ def run_svm_xai(
         raw_weights = trained_pipeline.named_steps['svc'].coef_[0]
         decision_scores = trained_pipeline.decision_function(X_train_fold)
         
-        # 1. RAW WEIGHTS
+        # Raw weights
         raw_weights_top1 = np.where(np.abs(raw_weights) >= np.percentile(np.abs(raw_weights), 99), raw_weights, 0)
         raw_weights_top5 = np.where(np.abs(raw_weights) >= np.percentile(np.abs(raw_weights), 95), raw_weights, 0)
 
-        # 2. HAUFE PATTERNS
+        # Haufe patterns
         haufe_map = explainer.compute_haufe_patterns(X_train_scaled, decision_scores)
         haufe_map_top1 = np.where(np.abs(haufe_map) >= np.percentile(np.abs(haufe_map), 99), haufe_map, 0)
         haufe_map_top5 = np.where(np.abs(haufe_map) >= np.percentile(np.abs(haufe_map), 95), haufe_map, 0)
 
-        # 3. GAONKAR MAPS
+        # Gaonkar maps
         gaonkar_z_map_thresholded_bonf005, _ = explainer.compute_gaonkar_maps(
             X_train=X_train_scaled, 
             y_train=y_train_fold, 
@@ -194,7 +191,7 @@ def run_svm_xai(
             alpha=0.1
         )
         
-        # NIfTI Definitions
+        # NIfTI definitions
         raw_nii_top1 = str(xai_results_dir / f"SVM_Raw_Weights_Fold_{fold_id}_Top1.nii")
         raw_nii_top5 = str(xai_results_dir / f"SVM_Raw_Weights_Fold_{fold_id}_Top5.nii")
         haufe_nii_top1 = str(xai_results_dir / f"SVM_Haufe_Fold_{fold_id}_Top1.nii")
@@ -202,7 +199,7 @@ def run_svm_xai(
         gaonkar_nii_bonf005 = str(xai_results_dir / f"SVM_Gaonkar_Fold_{fold_id}_bonf005.nii")
         gaonkar_nii_fdr01 = str(xai_results_dir / f"SVM_Gaonkar_Fold_{fold_id}_fdr01.nii")
 
-        # Serializing to NIfTI
+        # Saving as NIfTI
         explainer.reconstruct_and_save_3d(raw_weights_top1, mask_bool, mask_affine, raw_nii_top1)
         explainer.reconstruct_and_save_3d(raw_weights_top5, mask_bool, mask_affine, raw_nii_top5)
         explainer.reconstruct_and_save_3d(haufe_map_top1, mask_bool, mask_affine, haufe_nii_top1)
@@ -210,6 +207,7 @@ def run_svm_xai(
         explainer.reconstruct_and_save_3d(gaonkar_z_map_thresholded_bonf005, mask_bool, mask_affine, gaonkar_nii_bonf005)
         explainer.reconstruct_and_save_3d(gaonkar_z_map_thresholded_fdr01, mask_bool, mask_affine, gaonkar_nii_fdr01)
         
+        # Rendering
         slice_config = 3.0
         if bg_path:
 

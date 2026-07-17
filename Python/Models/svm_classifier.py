@@ -1,14 +1,11 @@
 """
 Module: svm_classifier.py
 
-Predictive Linear SVM Engine Module.
+Linear SVM Classifier.
 
 PURPOSE:
-    This module houses the fully encapsulated Support Vector Machine pipeline.
-    It incorporates decoupled atomic methods for training (GridSearch tuning) 
-    and pure inference, ensuring API uniformity with the Deep Learning ecosystem.
-
-    Designed as a pure library module without global execution blocks or manual path injections.
+    - Instantiate Linear Support Vector Machine Classifier
+    - Perform Double Cross-Validation based on cv_splits in cohort registry
 """
 import numpy as np
 import pandas as pd
@@ -32,10 +29,7 @@ from Python.utils.py_logger import CustomLogger
 
 class SVMClassifier:
     """
-    Monolithic Orchestration Engine for Double Cross-Validation using a Linear SVM.
-    
-    PURPOSE:
-        Encapsulates all mathematical processing operations and decoupled inference APIs.
+    Orchestrator for Double Cross-Validation using a Linear SVM.
     """
 
     def __init__(self, logger: CustomLogger, param_grid: Dict[str, List[Any]], inner_folds: int = 5):
@@ -55,14 +49,10 @@ class SVMClassifier:
     def load_data(csv_path: str, mask_path: str) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
         """
         Loads NIfTI volumes, extracts valid voxels via mask, and flattens to 1D.
-        
-        PURPOSE:
-            Pre-loading the mask as a boolean matrix enables vectorized NumPy 
-            indexing, eliminating slow triple nested loops (X, Y, Z).
             
         Args:
             csv_path (str): Absolute path to the normalized cohort CSV.
-            mask_path (str): Absolute path to the binarized TPM Boolean Mask.
+            mask_path (str): Absolute path to the binarized TPM Mask.
             
         Returns:
             Tuple[np.ndarray, np.ndarray, np.ndarray]: 
@@ -80,14 +70,13 @@ class SVMClassifier:
             y_list.append(int(row['label']))
             img_data = nib.load(row['file_path']).get_fdata(dtype=np.float32)
             
-            # Boolean Indexing directly extracts the valid values into a 1D vector
             X_list.append(img_data[mask_bool])
             
         return np.array(subjects), np.array(X_list, dtype=np.float32), np.array(y_list)
 
     def _evaluate_classification(self, y_true: np.ndarray, y_pred: np.ndarray, y_decision: np.ndarray) -> Dict[str, float]:
         """
-        Computes clinical metrics safely, guarding against mathematical edge-cases.
+        Computes clinical metrics.
         
         Args:
             y_true (np.ndarray): True class labels.
@@ -117,12 +106,11 @@ class SVMClassifier:
 
     def train(self, X_train: np.ndarray, y_train: np.ndarray, inner_cv_iterator: List[Tuple[np.ndarray, np.ndarray]]) -> Tuple[float, float, float, Any]:
         """
-        Unified Training API.
+        Unified Training method.
         
         PURPOSE:
-            Executes the Inner Loop tuning to find the optimal 'C' regularization coefficient 
-            and fits the final estimator on the full training fold. Protects against Data 
-            Leakage by binding StandardScaler inside a Pipeline.
+            Executes the Grid Search to find the optimal 'C' regularization coefficient 
+            and fits the final estimator on the full training fold. Uses StandardScaler inside a Pipeline.
             
         Args:
             X_train (np.ndarray): Flattened training feature matrix.
@@ -164,15 +152,15 @@ class SVMClassifier:
 
     def predict(self, model: SVC, X_test: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
         """
-        Pure Inference API (Deploy & XAI Ready).
+        Inference method
         
         PURPOSE:
-            Accepts a trained pipeline/model and a feature matrix, returning discrete 
-            predictions and continuous probabilities safely.
+            Accepts a trained model and a feature matrix, returning discrete 
+            predictions and continuous probabilities.
             
         Args:
             model (SVC): The trained sklearn pipeline.
-            X_test (np.ndarray): The hold-out feature matrix to evaluate.
+            X_test (np.ndarray): The outer fold feature matrix to evaluate.
             
         Returns:
             Tuple[np.ndarray, np.ndarray]: Discrete predictions and decision scores.
@@ -183,11 +171,11 @@ class SVMClassifier:
 
     def execute_nested_cv(self, X: np.ndarray, y: np.ndarray, subjects: np.ndarray, cv_splits: List[Dict[str, Any]]) -> Tuple[pd.DataFrame, List[Dict[str, Any]]]:
         """
-        Orchestrates the macro Double Cross-Validation pipeline.
+        Orchestrates the Double Cross-Validation pipeline.
         
         PURPOSE:
-            Iterates through the frozen CV topology, calling training/tuning on the 
-            inner folds and rigorous hold-out evaluation on the outer folds.
+            Iterates through the frozen CV topology, tuning on the 
+            inner folds and  evaluation on the outer folds.
             
         Args:
             X (np.ndarray): The complete flattened cohort tensor.
@@ -198,7 +186,7 @@ class SVMClassifier:
         Returns:
             Tuple[pd.DataFrame, List[Dict]]:
                 - fold_metrics_list: DataFrame capturing all clinical metrics per fold.
-                - fold_artifacts: List of dictionaries packing models and telemetry for XAI/rendering.
+                - fold_artifacts: List of dictionaries packing models and artifacts for XAI/rendering.
         """
 
         self.logger.info(f"Starting SVM Nested CV: {len(cv_splits)} Outer Folds, {self.inner_folds} Inner Folds.")
@@ -209,12 +197,12 @@ class SVMClassifier:
             fold_idx = split['fold']
             self.logger.debug(f"--- Processing Outer Fold {fold_idx}/{len(cv_splits)} ---")
             
-            # Map Absolute Outer Indices
+            # Map absolute outer indecis
             train_idx, test_idx = split['outer_train_idx'], split['outer_test_idx']
             X_train, X_test = X[train_idx], X[test_idx]
             y_train, y_test = y[train_idx], y[test_idx]
             
-            # Map Relative Inner Indices for GridSearchCV
+            # Map relative inner indices for GridSearchCV
             inner_iterator = split['inner_splits_relative']
             
             best_c, mean_cv_acc, std_cv_acc, best_model = self.train(X_train, y_train, inner_iterator)
@@ -228,7 +216,7 @@ class SVMClassifier:
 
             fold_metrics_list.append(metrics)
 
-            # Calculate True/False Positive Rates for the Renderer
+            # Calculate true/false positive rates for the renderer
             fpr, tpr, _ = roc_curve(y_test, y_decision)
             
             fold_artifacts.append({

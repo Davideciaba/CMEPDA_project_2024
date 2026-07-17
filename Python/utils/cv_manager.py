@@ -6,8 +6,6 @@ Cross-Validation Manager Module.
 PURPOSE:
     Centralizes the generation of Outer and Inner folds to guarantee absolute 
     synchronization between independent predictive engines (e.g., SVM and EfficientNet).
-    Ensures no data leakage occurs by freezing the topology into a JSON SSOT 
-    (Single Source of Truth).
 """
 import json
 import numpy as np
@@ -19,7 +17,7 @@ class CVManager:
     Generates deterministic splits for Nested Cross-Validation.
     
     PURPOSE:
-        Provides both Absolute indices (for Outer folds) and Relative indices 
+        Provides both absolute indices (for Outer folds) and relative indices 
         (for Inner GridSearchCV and Deep Learning Early Stopping).
     """
     def __init__(self, outer_folds: int = 5, inner_folds: int = 5, random_state: int = 42):
@@ -27,8 +25,8 @@ class CVManager:
         Initializes the Cross-Validation Manager.
         
         Args:
-            outer_folds (int): Number of folds for the external evaluation loop.
-            inner_folds (int): Number of folds for the internal hyperparameter tuning loop.
+            outer_folds (int): Number of outer folds
+            inner_folds (int): Number of inner folds
             random_state (int): Seed for deterministic, reproducible shuffling.
         """
         self.outer_folds = outer_folds
@@ -41,8 +39,7 @@ class CVManager:
         
         PURPOSE:
             Ensures class balance across all training and testing sets. Computes 
-            relative indices for inner folds to maintain compatibility with 
-            Scikit-Learn's GridSearchCV and PyTorch SubsetRandomSamplers.
+            relative indices for inner folds
             
         Args:
             y (np.ndarray): 1D array containing the target labels (e.g., 0 for CTRL, 1 for AD).
@@ -60,7 +57,7 @@ class CVManager:
         for fold_idx, (train_idx, test_idx) in enumerate(outer_cv.split(np.zeros(len(y)), y), start=1):
             y_train = y[train_idx]
             
-            # INNER CV: Generated relatively to y_train for Scikit-Learn GridSearchCV compatibility
+            # inner cv enerated relatively to y_train for Scikit-Learn GridSearchCV compatibility
             inner_cv = StratifiedKFold(n_splits=self.inner_folds, shuffle=True, random_state=self.random_state)
             inner_splits_relative = list(inner_cv.split(np.zeros(len(y_train)), y_train))
 
@@ -80,7 +77,7 @@ class CVManager:
         
         PURPOSE:
             Freezes the CV topology to disk. Injects 'security_test_subjects' to 
-            act as a cryptographic signature. This prevents Data Leakage in decoupled 
+            act as a signature. This prevents Data Leakage in decoupled 
             scripts by ensuring the loaded data strictly matches the expected topology.
             
         Args:
@@ -100,7 +97,7 @@ class CVManager:
                 else:
                     s_dict[k] = v
                     
-            # Inject SECURITY SIGNATURE: The exact subject IDs expected in the test fold
+            # The exact subject IDs expected in the test fold
             s_dict['security_test_subjects'] = subjects[split['outer_test_idx']].tolist()
             serializable_splits.append(s_dict)
 
@@ -111,16 +108,6 @@ class CVManager:
     def load_from_json(filepath: str) -> List[Dict[str, Any]]:
         """
         Loads serialized splits from disk.
-        
-        PURPOSE:
-            Retrieves the JSON topology. Python's native lists function identically 
-            to arrays for Numpy indexing, ensuring seamless integration.
-            
-        Args:
-            filepath (str): Path to the frozen .json artifact.
-            
-        Returns:
-            List[Dict[str, Any]]: The parsed Nested CV topology.
         """
         with open(filepath, 'r', encoding='utf-8') as f:
             return json.load(f)

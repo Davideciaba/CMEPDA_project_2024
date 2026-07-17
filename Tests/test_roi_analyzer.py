@@ -80,16 +80,15 @@ class TestROIAnalyzer(unittest.TestCase):
         # Execution
         df_result = self.analyzer.extract_regional_importance('fake_xai.nii', 'fake_atlas.nii', 'fake_csv.csv')
         
-        # Assertions
-        # 1. Only 2 regions must remain (Hippocampus and Amygdala)
+        # Only 2 regions must remain (Hippocampus and Amygdala)
         self.assertEqual(len(df_result), 2)
         
-        # 2. Filtered regions must not exist
+        # Filtered regions must not exist
         region_names = df_result['ROI_Name'].tolist()
         self.assertNotIn('Right Cerebral White Matter', region_names)
         self.assertNotIn('Left Lateral Ventricle', region_names)
         
-        # 3. Amygdala (0.8) must precede Hippocampus (0.5) since results are sorted descending
+        # Amygdala (0.8) must precede Hippocampus (0.5) since results are sorted descending
         self.assertEqual(df_result.iloc[0]['ROI_Name'], 'Right Amygdala')
         self.assertEqual(df_result.iloc[1]['ROI_Name'], 'Left Hippocampus')
 

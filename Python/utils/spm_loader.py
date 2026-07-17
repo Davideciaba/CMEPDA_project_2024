@@ -1,8 +1,8 @@
 """
 Module: spm_loader.py
 
-Bridges Python environments with the MATLAB Statistical Parametric Mapping (SPM) suite.
-Handles dynamic path resolution via environment variables to ensure portability.
+Bridges Python environments with the Statistical Parametric Mapping (SPM) suite.
+Handles dynamic path resolution via environment variables
 """
 import os
 import sys
@@ -16,17 +16,6 @@ def load_spm_environment() -> Path:
     """
     Locates the SPM directory via environment variable or .env file,
     validates its existence, and prioritizes it in the system path.
-
-    PURPOSE:
-        Prevents hardcoded paths, allowing the pipeline to execute on different 
-        local machines or HPC clusters simply by adjusting the .env config.
-        
-    Returns:
-        Path: A pathlib.Path object pointing to the validated SPM directory.
-        
-    Raises:
-        EnvironmentError: If the SPM_DIR variable is entirely missing.
-        FileNotFoundError: If the specified SPM path does not physically exist.
     """
     # Load .env file into environment variables
     load_dotenv(dotenv_path=DOTENV_FILE)
@@ -48,7 +37,6 @@ def load_spm_environment() -> Path:
         )
 
     # Ensure the target SPM directory is at the top of sys.path.
-    # Remove it first if it exists elsewhere in the path to avoid duplicates.
     spm_path_str = str(spm_path)
     if spm_path_str in sys.path:
         sys.path.remove(spm_path_str)

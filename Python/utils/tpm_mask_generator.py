@@ -7,7 +7,7 @@ PURPOSE:
     This module acts as the native Python replacement for the MATLAB-based 
     BrainMask generation pipeline. It guarantees spatial alignment between a 
     reference cohort and an external SPM Tissue Probability Map (TPM), 
-    extracts the Gray Matter volume, and binarizes it safely.
+    extracts the Gray Matter volume, and binarizes it.
 """
 import pathlib
 import pandas as pd
@@ -25,10 +25,6 @@ GRAY_MATTER_INDEX = 0
 class TpmMaskGenerator:
     """
     Handles the spatial validation and computation of the TPM boolean mask.
-    
-    PURPOSE:
-        Replicates the security and numerical stability of the legacy MATLAB pipeline
-        entirely within Python/NiBabel.
     """
 
     def __init__(self, logger: CustomLogger):
@@ -36,7 +32,7 @@ class TpmMaskGenerator:
         Initializes the mask generator.
         
         Args:
-            logger (CustomLogger): CustomLogger instance for execution tracking.
+            logger (CustomLogger): Centralized logging instance.
         """
         self.logger = logger
 
@@ -45,35 +41,31 @@ class TpmMaskGenerator:
         Main orchestration method to compute and save the TPM Mask.
         
         PURPOSE:
-            Loads the cohort space, verifies alignment with the SPM map, binarizes 
-            the Gray Matter layer, and safely exports the NIfTI artifact to disk.
+            Loads the cohort space, verifies alignment with the SPM TPM, binarizes 
+            the Gray Matter layer, and exports the NIfTI mask to disk.
             
         Args:
-            registry_csv_path (str): Absolute path to the normalized cohort CSV.
+            registry_csv_path (str): Absolute path to the cohort CSV.
             tpm_nifti_path (str): Absolute path to the external SPM TPM.nii file.
             output_mask_path (str): Absolute path where the binary mask will be exported.
             threshold (float): Probability threshold for Grey Matter binarization.
-            
-        Raises:
-            FileNotFoundError: If I/O resources (NIfTI or CSV) are missing.
-            ValueError: If spatial matrices or bounding box shapes are incompatible.
         """
         self.logger.info("--- Starting TPM Preprocessing ---")
         
-        # 1. Extract Reference Metadata
+        # Extract reference data
         ref_shape, ref_affine, ref_header = self._get_reference_metadata(registry_csv_path)
         
-        # 2. Process TPM Volume
+        # Process TPM Volume
         tpm_data, tpm_affine = self._process_tpm_volume(tpm_nifti_path)
         
-        # 3. Spatial Security Validation
+        # Validate alignment
         self._validate_spatial_alignment(ref_shape, ref_affine, tpm_data.shape, tpm_affine)
         
-        # 4. Binarization
-        self.logger.info(f"Computing Boolean Mask (Grey Matter threshold = {threshold:.2f})...")
+        # Binarization
+        self.logger.info(f"Computing Mask (Grey Matter threshold = {threshold:.2f})...")
         binary_mask = (tpm_data >= threshold).astype(np.float32)
         
-        # 5. Serialization
+        # Exporting
         out_path = pathlib.Path(output_mask_path)
         out_path.parent.mkdir(parents=True, exist_ok=True)
         
@@ -96,9 +88,6 @@ class TpmMaskGenerator:
         Returns:
             Tuple[Tuple[int, ...], np.ndarray, Any]: 
                 Contains the image shape, the 4x4 affine matrix, and the NIfTI header.
-                
-        Raises:
-            ValueError: If the CSV is completely empty.
         """
         try:
             df = pd.read_csv(csv_path)
@@ -137,12 +126,12 @@ class TpmMaskGenerator:
             tpm_img = nib.load(tpm_path)
             tpm_data = tpm_img.get_fdata(dtype=np.float32)
             
-            # Handle 4D volumes (SPM TPMs typically contain multiple tissue classes)
+            # Handle 4D volumes (SPM TPM contains multiple tissue classes)
             if tpm_data.ndim > 3:
                 self.logger.info(f"Detected a {tpm_data.ndim}D NIfTI file. Forcing extraction of Volume {GRAY_MATTER_INDEX + 1} (Gray Matter).")
                 tpm_data = tpm_data[..., GRAY_MATTER_INDEX]
                 
-            # Clean up NaNs to ensure numerical stability (Replica of MATLAB functionality)
+            # Clean up NaNs
             tpm_data = np.nan_to_num(tpm_data, copy=False, nan=0.0)
             
             return tpm_data, tpm_img.affine
@@ -166,12 +155,9 @@ class TpmMaskGenerator:
             
         Args:
             ref_shape (Tuple): Dimensionality of the reference cohort.
-            ref_affine (np.ndarray): 4x4 coordinate mapping of the reference cohort.
+            ref_affine (np.ndarray): 4x4 affine matrix of the reference cohort.
             tpm_shape (Tuple): Dimensionality of the TPM.
-            tpm_affine (np.ndarray): 4x4 coordinate mapping of the TPM.
-            
-        Raises:
-            ValueError: If dimensionality or affine transformations misalign.
+            tpm_affine (np.ndarray): 4x4 affine matrix of the TPM..
         """
         # Dimension Check
         if ref_shape != tpm_shape:

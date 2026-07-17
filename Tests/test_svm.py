@@ -5,7 +5,8 @@ Unit and Integration Testing Suite for the SVM Predictive Engine.
 Validates encapsulated methods, decoupled APIs (train/predict), and executes 
 E2E pipelines using randomized datasets. Designed for a flat directory structure.
 """
-import os
+import pathlib
+import sys
 import unittest
 from unittest.mock import patch, MagicMock
 import numpy as np
@@ -13,6 +14,13 @@ import pandas as pd
 import math
 from sklearn.svm import SVC
 from sklearn.pipeline import Pipeline
+
+# Dynamically resolve paths using pathlib
+current_dir= pathlib.Path(__file__).resolve().parent
+parent_dir= current_dir.parent
+
+# Add the parent directory to sys.path to allow imports from there
+sys.path.append(str(parent_dir))
 
 from Python.Models.svm_classifier import SVMClassifier
 from Python.utils.py_logger import CustomLogger
@@ -22,7 +30,7 @@ class TestSVMEngine(unittest.TestCase):
     Test suite for Python.Models.svm_classifier.SVMClassifier.
     
     PURPOSE:
-        Validates clinical metric calculations, pipeline un-packing, GridSearch 
+        Validates clinical metric calculations, pipeline, GridSearch 
         execution, and edge-case metric guarding (like single-class AUROC).
     """
     

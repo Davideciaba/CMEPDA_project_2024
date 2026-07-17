@@ -9,7 +9,7 @@ import os
 import numpy as np
 import pandas as pd
 import nibabel as nib
-from typing import Dict, Tuple, List
+from typing import Dict, List
 
 from Python.utils.py_logger import CustomLogger
 
@@ -28,7 +28,7 @@ class ROIAnalyzer:
         Initializes the ROIAnalyzer.
         
         Args:
-            logger (CustomLogger): Instance of the custom logging utility.
+            logger (CustomLogger): Centralized logging instance.
         """
         self.logger = logger
 
@@ -36,18 +36,11 @@ class ROIAnalyzer:
         """
         Loads the SPM Atlas dictionary mapping integer IDs to anatomical names.
         
-        PURPOSE:
-            Reads the metadata CSV to translate numerical ROI labels inside the 
-            NIfTI atlas back into human-readable anatomical regions.
-            
         Args:
             label_csv_path (str): Absolute path to the CSV containing atlas labels.
             
         Returns:
             Dict[int, str]: Dictionary mapping ROI IDs to their string names.
-            
-        Raises:
-            FileNotFoundError: If the CSV file is missing.
         """
         if not os.path.exists(label_csv_path):
             raise FileNotFoundError(f"Atlas label CSV not found at: {label_csv_path}")
@@ -66,7 +59,7 @@ class ROIAnalyzer:
         
         PURPOSE:
             Extracts voxel data guided by the SPM Atlas. Filters out non-relevant tissues 
-            (White Matter, Ventricles, Cerebellum) to strictly focus on Gray Matter.
+            (White Matter, Ventricles, Cerebellum) to focus on Gray Matter.
             If use_absolute is True, computes metrics on absolute values (for magnitude/ranking).
             If use_absolute is False, computes metrics on raw values (keeping signs for directional impact).
             
@@ -74,7 +67,7 @@ class ROIAnalyzer:
             xai_map_path (str): Path to the 3D XAI NIfTI map.
             atlas_map_path (str): Path to the discrete SPM Atlas NIfTI map.
             label_csv_path (str): Path to the CSV mapping atlas IDs to names.
-            use_absolute (bool): Toggles absolute magnitude extraction vs directional extraction.
+            use_absolute (bool): Flag for absolute magnitude extraction vs directional extraction.
                 
         Returns:
             pd.DataFrame: Table containing ROI_ID, ROI_Name, Mean_ROI_Signal, Sum_ROI_Signal.
@@ -86,8 +79,8 @@ class ROIAnalyzer:
         xai_vol = xai_img.get_fdata()
         atlas_vol = np.round(atlas_img.get_fdata()).astype(int)
         
-        # As specified by Bloch, use absolute values for global importance to avoid signal cancellation.
-        # Otherwise, keep signs to see if the feature pushes towards AD or CTRL.
+        # Use absolute values for global importance to avoid signal cancellation.
+        # Otherwise, keep signs to see if the feature are protective or progressive
         if use_absolute:
             work_vol = np.abs(xai_vol)
         else:
@@ -207,7 +200,7 @@ class ROIAnalyzer:
 
     def calculate_ndcg(self, predicted_scores: np.ndarray, true_scores: np.ndarray, k: int) -> float:
         """
-        Calculates the Normalized Discounted Cumulative Gain (nDCG@K).
+        Calculates the Normalized Discounted Cumulative Gain (nDCG).
         
         PURPOSE:
             Evaluates the ranking quality of a predictive XAI model against the Ground Truth.
@@ -229,7 +222,7 @@ class ROIAnalyzer:
         idcg = self._dcg(ideal_scores)
         if idcg == 0: return 0.0
         
-        # Determine the ACTUAL ranking proposed by the XAI model
+        # Determine the actual ranking proposed by the XAI model
         pred_order = np.argsort(predicted_scores)[::-1]
         # Retrieve the True scores ordered by the XAI's ranking logic
         actual_scores = true_scores[pred_order][:k]
@@ -240,15 +233,6 @@ class ROIAnalyzer:
     def compare_maps_ndcg(self, map1_df: pd.DataFrame, map2_df: pd.DataFrame, metric: str = 'Mean_ROI_Signal', k: int = 10) -> float:
         """
         Wrapper to compute nDCG directly between two Pandas DataFrames containing ROI metrics.
-        
-        Args:
-            map1_df (pd.DataFrame): DataFrame for the predicted map.
-            map2_df (pd.DataFrame): DataFrame for the reference/ground truth map.
-            metric (str): The column name to use for comparison.
-            k (int): Number of top elements to evaluate.
-            
-        Returns:
-            float: The calculated nDCG score.
         """
         merged = pd.merge(map1_df, map2_df, on='ROI_ID', suffixes=('_pred', '_true'))
         if merged.empty: return 0.0
