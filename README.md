@@ -5,7 +5,7 @@
 ![GitHub repo size](https://img.shields.io/github/repo-size/Davideciaba/CMEPDA_project_2024)
 ![CircleCI](https://circleci.com/gh/Davideciaba/CMEPDA_project_2024/tree/main.svg?style=shield)
 
-The aim of this repository is to test the interpretative capabilities of two Explainable AI (XAI) approaches for Support Vector Machines (SVM) in the field of medical imaging, specifically for the classification of Alzheimer's Disease (AD) versus Healthy Controls (CTRL) using ADNI MRI datasets+. The two XAI approaches ([Gaonkar](https://doi.org/10.1016/j.media.2015.06.008) and [Haufe](http://dx.doi.org/10.1016/j.neuroimage.2013.10.067)) are quantitatively compared against Voxel-Based Morphometry (VBM) analysis and raw SVM weights using NDCG ranking metrics aggregated over Regions of Interest (ROI). The computational framework is developed across MATLAB—ideal for medical image preprocessing via its toolboxes—and Python, which provides the flexibility needed to build the ML models and XAI frameworks.
+The aim of this repository is to test the interpretative capabilities of two Explainable AI (XAI) approaches for Support Vector Machines (SVM) in the field of medical imaging, specifically for the classification of Alzheimer's Disease (AD) versus Healthy Controls (CTRL) using ADNI MRI datasets. The two XAI approaches ([Gaonkar](https://doi.org/10.1016/j.media.2015.06.008) and [Haufe](http://dx.doi.org/10.1016/j.neuroimage.2013.10.067)) are quantitatively compared against Voxel-Based Morphometry (VBM) analysis and raw SVM weights using NDCG ranking metrics aggregated over Regions of Interest (ROI). The computational framework is developed across MATLAB—ideal for medical image preprocessing via its toolboxes—and Python, which provides the flexibility needed to build the ML models and XAI frameworks.
 
 # Table of contents
 + [Prerequisites](#prerequisites)
@@ -132,7 +132,7 @@ Before comparison, specific thresholds were applied to isolate relevant voxels b
 To properly compare the various generated maps with the VBM (which visualizes local atrophy), we performed an aggregation within Regions of Interest (ROI) using the SPM Neuromorphometric atlas. 
 
 ## Heat Map & Feature Importance
-The feature importance — used for the construction of global heatmaps and the correlation matrix based on the NDCG metric—is calculated by considering mean of the **absolute value** of the attributions, as our global models generate both positive and negative attributes. 
+The feature importance — used for the construction of global heatmaps and the correlation matrix based on the NDCG metric—is calculated by considering mean of the **absolute value** of the attributions, as our global models generate both positive and negative attributes. Due to graphical restraints in the NDCG correlation matrix, the numerical values have been added in a .csv file in the [Plots](Python_Results\XAI_Comparison_Results\Plots) folder, with a range of the normalized score between 0.68 and 1.
 
 *Visual Comparison of XAI outputs (SVM vs VBM):*
 <div align="center">
@@ -147,13 +147,30 @@ The feature importance — used for the construction of global heatmaps and the 
 # Usage
 Due to the dimension of the model's weights we were not able to upload them on github. To avoid the problem and make the user able to test the code using our tuning results we upload them at the following links: [Weights](https://drive.google.com/drive/folders/1vJJEUFFgmrWvrM_9QjdptaV1J5LFpE6y?usp=sharing). The user has to move the folders to the root directory of the project before running the code.
 
-Clone this repository and run the main orchestrator using default parameters (In case you are running this code for the first time remember to install the requirements.):
+Clone this repository and run the main orchestrator using default parameters (In case you are running this code for the first time remember to install the requirements).
+
+For the preprocessing and Ground Truth generation, you need MATLAB (tested on version 2025b).
+
 ```bash
 cd CMEPDA_project_2024
 pip install -r requirements.txt 
 python main.py
 ```
-Refer to help for the different section of the main orchestrator:
+Refer to help for the different section of the Matlab and Python orchestrators:
+```bash
+>> help main
+  MAIN Entry point for the MATLAB pipeline.
+  Orchestrates the RunVBMPipeline and RunMaskComparison scripts.
+
+  Options (Name-Value arguments):
+    'runVBM'              (logical) Execute the VBM Pipeline. Default: false
+    'runMaskComp'         (logical) Execute the Mask Comparison script. Default: false
+    'enableFileLogging'   (logical) Enable writing .log files to disk. Default: false
+    'outputDir'           (char)    Target root directory for outputs. Default: 'MATLAB_Results'
+    'inputDir'            (char)    Source directory containing NIfTI/CSV. Default: 'AD_CTRL'
+    'csvName'             (char)    Name of the clinical covariate CSV file. Default: 'covariateADCTRLsexAgeTIV.csv'
+
+```
 ```bash
 python main.py --help
 usage: main.py [-h] [-log] [-out OUTPUT_DIR] [-in INPUT_DIR] [-csv CSV_NAME] [-set] [-svm] [-xai] [-up] [-bg] [-cv C_VALUES [C_VALUES ...]] [-xc] [-of OUTER_FOLDS] [-inf INNER_FOLDS]
@@ -184,11 +201,24 @@ options:
   -inf INNER_FOLDS, --inner-folds INNER_FOLDS
                         Number of inner cross-validation folds. Default: 5
 ```
+To execute the MATLAB models, you can run the following commands in the MATLAB Command Window:
+```bash
+% Execute the standard VBM Pipeline
+main('runVBM', true)
+
+% Execute the Mask Comparison with file logging enabled
+main('runMaskComp', true, 'enableFileLogging', true)
+
+% Execute the VBM Pipeline specifying a custom output directory
+main('runVBM', true, 'outputDir', 'C:\Custom\Path\Results')
+
+```
+
 In order to run the model as intended you need to pass the functions with this order:
 ```bash
 python main.py -set -svm -xai -cv 0.0001 0.001 -xc    
 ```
-For the preprocessing part you need **Matlab**, version 25.2b, not included in the project's requirements. 
+
 # References
 
 The original dataset comes from the Alzheimer Dataset used in the following paper:
