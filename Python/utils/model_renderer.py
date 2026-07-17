@@ -502,50 +502,6 @@ class ModelRenderer:
         finally:
             plt.close(fig)
 
-    def plot_diverging_bars(self, df: pd.DataFrame, score_col: str, title: str, filename: str, top_k: int = 20) -> None:
-        """
-        Creates a diverging bar chart representing the directional impact of features.
-        
-        PURPOSE:
-            Highlights not just magnitude, but whether a region pushes the model 
-            prediction towards AD (negative sign = Blue) or CTRL (positive sign = Red).
-            
-        Args:
-            df (pd.DataFrame): Dataframe containing ROI metrics.
-            score_col (str): Column containing RAW values with signs.
-            title (str): Plot title.
-            filename (str): Name of the exported file.
-            top_k (int): Number of top regions to display based on absolute magnitude.
-        """
-        self.logger.info(f"Building Diverging Bar Chart for {title}...")
-        
-        df_copy = df.copy()
-        df_copy['Abs_Score'] = df_copy[score_col].abs()
-        df_sorted = df_copy.sort_values(by='Abs_Score', ascending=False).head(top_k)
-        df_sorted = df_sorted.iloc[::-1]
-        
-        fig, ax = plt.subplots(figsize=(12, 8), dpi=150)
-        
-        colors = ['indianred' if x > 0 else 'steelblue' for x in df_sorted[score_col]]
-        
-        ax.barh(df_sorted['ROI_Name'], df_sorted[score_col], color=colors, edgecolor='black')
-        ax.axvline(0, color='black', linewidth=1)
-        
-        ax.set_xlabel('Mean ROI Weight (Directional Impact)')
-        ax.set_ylabel('Brain Regions (Gray Matter)')
-        ax.set_title(f'Top {top_k} Directional Impact - {title}', fontsize=14)
-        ax.grid(axis='x', linestyle='--', alpha=0.5)
-        
-        out_path = self.output_dir / filename
-        out_path.parent.mkdir(parents=True, exist_ok=True)
-        try:
-            fig.tight_layout()
-            fig.savefig(out_path, dpi=300)
-            self.logger.success(f"Diverging Bars plot saved to: {out_path.name}")
-        except Exception as e:
-            self.logger.error(f"Failed to save Diverging Bars plot: {e}")
-        finally:
-            plt.close(fig)
 
     def plot_heatmap(self, df_matrix: pd.DataFrame, filename: str, title_suffix: str = "") -> None:
         """
