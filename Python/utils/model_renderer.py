@@ -397,7 +397,7 @@ class ModelRenderer:
         
         fig, ax = plt.subplots(figsize=(10, 8), dpi=150)
         
-        sns.heatmap(ndcg_matrix, cmap='Blues', annot=True, fmt=".2f", vmin=0.0, vmax=1.0,
+        sns.heatmap(ndcg_matrix, cmap='Blues', annot=False, vmin=0.0, vmax=1.0,
                          cbar_kws={'label': 'nDCG Score'}, linewidths=.5, linecolor='lightgray', ax=ax)
         
         ax.set_title(f'nDCG Similarity Matrix ({title_suffix})', fontsize=16, pad=20)

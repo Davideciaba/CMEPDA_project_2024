@@ -5,7 +5,7 @@
 ![GitHub repo size](https://img.shields.io/github/repo-size/Davideciaba/CMEPDA_project_2024)
 ![CircleCI](https://circleci.com/gh/Davideciaba/CMEPDA_project_2024/tree/main.svg?style=shield)
 
-The aim of this repository is to test the interpretative capabilities of two Explainable AI (XAI) approaches for Support Vector Machines (SVM) in the field of medical imaging, specifically for the classification of Alzheimer's Disease (AD) versus Healthy Controls (CTRL) using ADNI MRI datasets+. The two XAI approaches (Gaonkar and Haufe) are quantitatively compared against Voxel-Based Morphometry (VBM) analysis and raw SVM weights using NDCG ranking metrics aggregated over Regions of Interest (ROI). The computational framework is developed across MATLAB—ideal for medical image preprocessing via its toolboxes—and Python, which provides the flexibility needed to build the ML models and XAI frameworks.
+The aim of this repository is to test the interpretative capabilities of two Explainable AI (XAI) approaches for Support Vector Machines (SVM) in the field of medical imaging, specifically for the classification of Alzheimer's Disease (AD) versus Healthy Controls (CTRL) using ADNI MRI datasets+. The two XAI approaches ([Gaonkar](https://doi.org/10.1016/j.media.2015.06.008) and [Haufe](http://dx.doi.org/10.1016/j.neuroimage.2013.10.067)) are quantitatively compared against Voxel-Based Morphometry (VBM) analysis and raw SVM weights using NDCG ranking metrics aggregated over Regions of Interest (ROI). The computational framework is developed across MATLAB—ideal for medical image preprocessing via its toolboxes—and Python, which provides the flexibility needed to build the ML models and XAI frameworks.
 
 # Table of contents
 + [Prerequisites](#prerequisites)
@@ -34,23 +34,15 @@ The project features a decoupled architecture, meaning the Python and MATLAB pip
 * **SPM**: The VBM Analysis requires SPM. Similarly to Python, you must duplicate the `config.example.json` file in the project's root directory, rename it to `config.json,` and set the `SPM_DIR` key to your local absolute SPM path (e.g., `{"SPM_DIR": "C:\\path\\to\\spm"}`).
 
 # Data & Preprocessing
-The dataset utilized in this study stems from the Retico article, comprising 144 subjects affected by AD and 189 healthy controls. 
+The dataset utilized in this study stems from the [Retico article](https://doi.org/10.1111/jon.12163), comprising 144 subjects affected by AD and 189 healthy controls. 
 Before model ingestion, the dataset underwent an extensive preprocessing pipeline governed by the DARTEL algorithm. The standardization steps included:
 * Tissue segmentation.
 * Generation of a study-specific template.
 * Warping of the template and the segmented maps into the standard MNI space.
 * Modulation of the volumes altered by spatial warping to preserve gray matter quantities.
 
-<div align="center">
-
-| **Raw MRI (MNI)** | **Preprocessed GM Mask** |
-|--------------------|------------------|
-| <img src="Readme_images/raw_mri.png" alt="Raw" width="200"> | <img src="Readme_images/gm_mask.png" alt="Preprocessed" width="200"> |
-
-</div>
-
 # Validation Framework
-We trained a classical linear SVM model, aligning with the methodology proposed by Retico. To ensure robustness, the dataset was adapted using a Double Cross-Validation strategy:
+We trained a classical linear SVM model, aligning with the methodology proposed by [Retico](https://doi.org/10.1111/jon.12163). To ensure robustness, the dataset was adapted using a Double Cross-Validation strategy:
 * **Outer 5-fold CV** for rigorous evaluation.
 * **Inner 5-fold CV** for hyperparameter tuning.
 
@@ -63,6 +55,14 @@ To strictly avoid **Data Leakage**, the scaler is calibrated exclusively on the 
 The Ground Truth is defined via VBM analysis, a method that allows determining regional differences in tissue volume (specifically, the gray matter of patients, which is the most affected by Alzheimer's) and evaluating the statistical contribution of each voxel to atrophy. 
 * **Methodology:** A General Linear Model based on a Two-Sample T-test is computed over the entire dataset, incorporating age, sex, and Total Intracranial Volume (TIV) as regressors.
 * **Output:** The output generates a Global VBM Mask. The threshold is determined via False Discovery Rate correction, combined with a specific TPM threshold.
+
+<div align="center">
+
+| **VBM TPM Mask (FWE 0.05)** |
+|--------------------
+| <img src="MATLAB_Results\VBM_Pipeline_Results\Plots\VBM_TPM_Mask_FWE_005.png" alt="Raw" width="600"> |
+
+</div>
 
 ## Linear SVM & XAI
 The core of the project focuses on interpretability methods, as the raw weights of the linear SVM (defined as the "backward model") assign high values to voxels acting as suppression variables, thereby masking crucial regions. To overcome these limitations, the training and XAI extraction pipelines have been completely decoupled.
@@ -88,7 +88,11 @@ The hyperparameters explored during the grid search are shown in the following t
 ### Spatial Interpretability (XAI)
 A standalone XAI orchestrator loads the pre-trained pipelines from disk and flanks the model with advanced mathematical transformations:
 * **Raw Weights:** Extracted directly from the SVM coefficients (`svc.coef_`).
-* **Haufe Transformation:** This transforms the "backward model" into a "forward model" by calculating the covariance between the scaled training variables and the decision function scores. This extracts Activation Patterns that isolate the actual neurophysiological distribution and gray matter variation.
+
+
+* **Haufe transformation:** This transforms the "backward model" into a "forward model" by calculating the covariance between the scaled training variables and the decision function scores. This extracts Activation Patterns that isolate the actual neurophysiological distribution and gray matter variation.
+
+
 * **Gaonkar Transformation:** An analytic margin-aware transformation is applied to the weight vector, generating p-value maps that allow building a multivariate statistical inference complementary to VBM. It dynamically utilizes the optimal `C` parameter and the number of support vectors extracted from the trained model.
 
 Finally, the 1D arrays are reconstructed into 3D NIfTI volumes using the original spatial affine matrix and rendered as 3D activation maps over a reference background image (e.g., CTRL-117).
@@ -98,18 +102,46 @@ The generated maps represent the general decision rules learned over the entire 
 
 ## Thresholding and ROI Aggregation
 Before comparison, specific thresholds were applied to isolate relevant voxels based on the mathematical nature of the maps:
-* **Continuous Maps (Haufe and Raw Weights):** We selected the top 1% (99th percentile) and top 5% (95th percentile) of voxels with the highest intensity to isolate clusters with the greatest feature importance.
-* **Statistical Maps (Gaonkar):** Based on a strict statistical approach, we utilized an alpha = 0.05 for the Bonferroni method and q = 0.1 for the Benjamini-Yekutieli method (FDR).
+* **Continuous Maps ([Haufe](http://dx.doi.org/10.1016/j.neuroimage.2013.10.067) and Raw Weights):** We selected the top 1% (99th percentile) and top 5% (95th percentile) of voxels with the highest intensity to isolate clusters with the greatest feature importance.
+<div align="center">
+
+| **SVM Raw Weights (Top 1% Voxel - Fold 3)** |
+|--------------------
+| <img src="Python_Results\SVM_XAI_Results\Plots\SVM_RawWeights_Fold_3_Top1.png" alt="Raw" width="600"> |
+
+</div>
+
+<div align="center">
+
+| **Haufe Transformation (Top 1% Voxel - Fold 3)** |
+|--------------------
+| <img src="Python_Results\SVM_XAI_Results\Plots\SVM_Haufe_Fold_3_Top1.png" alt="Raw" width="600"> |
+
+</div>
+
+* **Statistical Maps ([Gaonkar](https://doi.org/10.1016/j.media.2015.06.008)):** Based on a strict statistical approach, we utilized an alpha = 0.05 for the Bonferroni method and q = 0.1 for the Benjamini-Yekutieli method (FDR).
+
+<div align="center">
+
+| **Gaonkar Transformation (Bonferroni 0.05 - Fold 3)** |
+|--------------------
+| <img src="Python_Results\SVM_XAI_Results\Plots\SVM_Gaonkar_Fold_3_bonf005.png" alt="Raw" width="600"> |
+
+</div>
 
 To properly compare the various generated maps with the VBM (which visualizes local atrophy), we performed an aggregation within Regions of Interest (ROI) using the SPM Neuromorphometric atlas. 
 
 ## Heat Map & Feature Importance
-The feature importance—used for the construction of global heatmaps and the correlation matrix based on the NDCG metric—is calculated by considering the **absolute value** of the attributions, as our global models generate both positive and negative attributes. 
-To preserve the original positive/negative signature for each region, these absolute maps are accompanied by **diverging bar plots**.
+The feature importance — used for the construction of global heatmaps and the correlation matrix based on the NDCG metric—is calculated by considering mean of the **absolute value** of the attributions, as our global models generate both positive and negative attributes. 
 
 *Visual Comparison of XAI outputs (SVM vs VBM):*
 <div align="center">
-<img src="Readme_images/heat_map.png" width="800"> 
+<img src="Python_Results\XAI_Comparison_Results\Plots\Heatmap_AllFolds.png" width="800"> 
+</div>
+
+*nDCG Correlation Matrix (SVM vs VBM):*
+<div align="center">
+<img src="Python_Results\XAI_Comparison_Results\Plots\nDCG_Correlation_Matrix_Extended.png" width="800"> 
 </div>
 
 # Usage
@@ -152,8 +184,11 @@ options:
   -inf INNER_FOLDS, --inner-folds INNER_FOLDS
                         Number of inner cross-validation folds. Default: 5
 ```
-
-For the preprocessing part you need **Matlab**, version 25.2, not included in the project's requirements. 
+In order to run the model as intended you need to pass the functions with this order:
+```bash
+python main.py -set -svm -xai -cv 0.0001 0.001 -xc    
+```
+For the preprocessing part you need **Matlab**, version 25.2b, not included in the project's requirements. 
 # References
 
 The original dataset comes from the Alzheimer Dataset used in the following paper:
