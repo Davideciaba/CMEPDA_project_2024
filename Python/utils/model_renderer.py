@@ -413,7 +413,7 @@ class ModelRenderer:
         """
         Crea e salva un grafico a barre orizzontali delle Top K regioni.
         """
-        self.logger.info(f"Generazione del grafico Top {top_k} per {title}...")
+        self.logger.info(f"Building {top_k} bar plot for {title}...")
         
         df_sorted = df.sort_values(by=score_col, ascending=False).head(top_k)
         df_sorted = df_sorted.iloc[::-1]
@@ -443,7 +443,7 @@ class ModelRenderer:
         """
         Crea un grafico a barre divergenti per mostrare l'impatto direzionale.
         """
-        self.logger.info(f"Generazione Diverging Bar Chart per {title}...")
+        self.logger.info(f"Building Diverging Bar Chart for {title}...")
         
         df_copy = df.copy()
         df_copy['Abs_Score'] = df_copy[score_col].abs()
@@ -473,11 +473,11 @@ class ModelRenderer:
         finally:
             plt.close(fig)
 
-    def plot_bloch_style_heatmap(self, df_matrix: pd.DataFrame, filename: str, title_suffix: str = "") -> None:
+    def plot_heatmap(self, df_matrix: pd.DataFrame, filename: str, title_suffix: str = "") -> None:
         """
         Genera una heatmap stile Bloch per confrontare la Feature Importance su tutti i fold.
         """
-        self.logger.info(f"Generazione della Heatmap Comparativa (Stile Bloch) - {title_suffix}...")
+        self.logger.info(f"Building Heatmap - {title_suffix}...")
         
         fig, ax = plt.subplots(figsize=(16, 14), dpi=150)
         
@@ -498,7 +498,7 @@ class ModelRenderer:
         try:
             fig.tight_layout()
             fig.savefig(out_path, dpi=300)
-            self.logger.success(f"Heatmap salvata in: {out_path.name}")
+            self.logger.success(f"Heatmap saved to: {out_path.name}")
         except Exception as e:
             self.logger.error(f"Failed to save Heatmap: {e}")
         finally:
@@ -508,7 +508,7 @@ class ModelRenderer:
         """
         Genera una matrice di correlazione nDCG all-to-all tra i metodi basata sulla Feature Importance.
         """
-        self.logger.info(f"Generazione della Matrice nDCG - {title_suffix}...")
+        self.logger.info(f"Building nDCG Matrix - {title_suffix}...")
         
         fig, ax = plt.subplots(figsize=(10, 8), dpi=150)
         
@@ -529,8 +529,8 @@ class ModelRenderer:
         try:
             fig.tight_layout()
             fig.savefig(out_path, dpi=300)
-            self.logger.success(f"Matrice nDCG salvata in: {out_path.name}")
+            self.logger.success(f"nDCG Matrix saved to: {out_path.name}")
         except Exception as e:
-            self.logger.error(f"Failed to save Matrice nDCG: {e}")
+            self.logger.error(f"Failed to save nDCG Matrix: {e}")
         finally:
             plt.close(fig)

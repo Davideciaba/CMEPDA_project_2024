@@ -3,3 +3,5 @@ __pycache__/
 *$py.class
 .env
 config.json
+*.joblib
+SVM_*.nii

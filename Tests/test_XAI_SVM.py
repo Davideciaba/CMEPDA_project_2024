@@ -21,7 +21,7 @@ import unittest
 from unittest.mock import patch
 import numpy as np
 
-from Python.XAI.XAI_SVM import SVMExplainer
+from Python.utils.xai_svm import SVMExplainer
 from Python.utils.py_logger import CustomLogger
 
 class TestSVMAnalyticalXAI(unittest.TestCase):

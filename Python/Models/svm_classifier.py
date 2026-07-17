@@ -33,9 +33,17 @@ class SVMClassifier:
     Encapsulates all mathematical processing operations and decoupled inference APIs.
     """
 
-    def __init__(self, logger: CustomLogger, param_grid: Dict[str, List[Any]]):
+    def __init__(self, logger: CustomLogger, param_grid: Dict[str, List[Any]], inner_folds: int = 5):
+        """
+        Initializes the SVM Engine.
+        Args:
+            logger: Centralized logging instance.
+            param_grid: The hyperparameter search space (e.g., {'C': [0.001, 0.01]}).
+            inner_folds: The number of inner folds used for internal hyperparameter tuning.
+        """
         self.logger = logger
         self.param_grid = param_grid
+        self.inner_folds = inner_folds
 
     @staticmethod
     def load_data(csv_path: str, mask_path: str) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
@@ -128,7 +136,7 @@ class SVMClassifier:
     def execute_nested_cv(self, X: np.ndarray, y: np.ndarray, subjects: np.ndarray, cv_splits: List[Dict[str, Any]]) -> Tuple[pd.DataFrame, List[Dict[str, Any]]]:
         """Orchestrates the macro Double Cross-Validation pipeline."""
 
-        self.logger.info(f"Starting SVM Nested CV: {len(cv_splits)} Outer Folds, {len(cv_splits[0]['inner_splits_relative'])} Inner Folds.")
+        self.logger.info(f"Starting SVM Nested CV: {len(cv_splits)} Outer Folds, {self.inner_folds} Inner Folds.")
         
         fold_metrics_list, fold_artifacts = [], []
 

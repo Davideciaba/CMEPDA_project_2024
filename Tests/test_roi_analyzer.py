@@ -15,8 +15,8 @@ if python_dir not in sys.path:
     sys.path.insert(0, python_dir)
 
 # Ora gli import relativi a "Python" funzioneranno
-from XAI.roi_analyzer import ROIAnalyzer
-from utils.py_logger import CustomLogger
+from Python.utils.roi_analyzer import ROIAnalyzer
+from Python.utils.py_logger import CustomLogger
 
 class TestROIAnalyzer(unittest.TestCase):
 

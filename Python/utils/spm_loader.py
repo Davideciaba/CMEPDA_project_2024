@@ -9,11 +9,11 @@ DOTENV_FILE = ".env"
 
 def load_spm_environment() -> Path:
     """
-    Locates the SPM directory via Environment Variable or .env file,
+    Locates the SPM directory via environment variable or .env file,
     validates its existence, and prioritizes it in the system path.
 
     Returns:
-        Path: A pathlib.Path object pointing to the validated SPM root directory.
+        Path: A pathlib.Path object pointing to the validated SPM directory.
     """
     # Load .env file into environment variables
     load_dotenv(dotenv_path=DOTENV_FILE)

@@ -62,7 +62,7 @@ class TestModelRenderer(unittest.TestCase):
     def test_bloch_heatmap(self, mock_savefig):
         """Verify the heatmap safely accepts the matrix configuration."""
         matrix = pd.DataFrame({'Model1': [0.1, 0.9], 'Model2': [0.2, 0.8]}, index=['R1', 'R2'])
-        self.renderer.plot_bloch_style_heatmap(matrix, "heatmap.png")
+        self.renderer.plot_heatmap(matrix, "heatmap.png")
         mock_savefig.assert_called_once()
         
     @patch('matplotlib.figure.Figure.savefig')

@@ -6,15 +6,12 @@ Standalone execution script for extracting spatial interpretation patterns
 Guarantees decoupling from the training pipeline.
 """
 import sys
-import pathlib
+from pathlib import Path
 import pandas as pd
 import numpy as np
 import nibabel as nib
 import joblib
-
-current_file_path = pathlib.Path(__file__).resolve()
-project_root = current_file_path.parents[2]
-sys.path.append(str(project_root))
+from typing import Optional
 
 from Python.utils.py_logger import CustomLogger
 from Python.utils.cv_manager import CVManager
@@ -22,81 +19,128 @@ from Python.utils.spm_loader import load_spm_environment
 from Python.utils.tpm_mask_generator import TpmMaskGenerator
 from Python.Models.svm_classifier import SVMClassifier
 from Python.utils.model_renderer import ModelRenderer
-from Python.XAI.xai_svm import SVMExplainer
+from Python.utils.xai_svm import SVMExplainer
+from Python.utils.reset_directory import reset_directory
 
-def run_svm_xai():
-    CURRENT_DIR = pathlib.Path(__file__).parent.resolve()
-    PROJECT_DIR = CURRENT_DIR.parent.parent
-    SETUP_DIR = PROJECT_DIR / "Python" / "Common_Setup"
+def run_svm_xai(
+    enable_file_logging: bool = False, 
+    output_dir: Optional[Path] = None
+) -> None:
+    
+    current_dir = Path(__file__).parent.resolve()
+    base_out = output_dir.resolve() if output_dir else current_dir
+
+    common_setup_dir = base_out / "Common_Setup_Results"
+    registry_csv_path = common_setup_dir / "cohort_registry.csv"
+    folds_json_path = common_setup_dir / "cv_folds_registry.json"
+    mask_path = common_setup_dir / "Mask" / "tpm_mask.nii"
+
+    svm_base = base_out / "SVM_Classification_Results"
+    svm_results_dir = svm_base / "Results"
+
+    xai_base = base_out / "SVM_XAI_Results"
+    xai_results_dir = xai_base / "Results"
+    xai_plots_dir = xai_base / "Plots"
+    xai_log_dir = xai_base / "Log_Files"
 
     log = CustomLogger(name="SVM_XAI_Pipeline")
     log.add_console_handler(level="DEBUG", use_colors=True)
-    log.info("--- Booting Decoupled SVM XAI Engine ---")
 
-    registry_csv_path = SETUP_DIR / "python_registry.csv"
-    results_dir = CURRENT_DIR / "Results"
-    plots_dir = CURRENT_DIR / "Plots"
-    mask_path = SETUP_DIR / "Mask" / "tpm_mask.nii"
-    folds_json_path = SETUP_DIR / "cv_folds_registry.json"
+    if enable_file_logging:
+        reset_directory(xai_log_dir, log)
+        log_path = xai_log_dir / "SVM_XAI.log"
+        try:
+            log.add_file_handler(str(log_path), level="DEBUG")
+            log.success(f"File logging safely initialized at: {log_path.name}")
+        except OSError as e:
+            log.critical(f"I/O ERROR: Cannot write to {log_path.name}")
+            log.critical("Pipeline aborted. Ensure you have write permissions.")
+            sys.exit(1)
+    else:
+        # Dummy write test for console-only mode
+        xai_base.mkdir(parents=True, exist_ok=True)
+        dummy_file = xai_base / ".dummy_write_test"
+        try:
+            with open(dummy_file, 'w') as f: pass
+            dummy_file.unlink()
+            log.info("Dummy write test passed. Filesystem allows writing. Operating in console-only mode.")
+        except OSError as e:
+            log.critical(f"I/O ERROR: Cannot write to {xai_base}.")
+            log.critical(f"Pipeline aborted. Ensure you have write permissions. Details: {e}")
+            sys.exit(1)
 
+    log.info("--- Booting Linear SVM XAI engine ---")
+
+    reset_directory(xai_results_dir, log)
+    reset_directory(xai_plots_dir, log)
+
+    if not registry_csv_path.exists() or not folds_json_path.exists():
+        log.error("FATAL: Common Setup Results are missing.")
+        log.error(f"Please run the setup phase first or ensure path is correct: {common_setup_dir}")
+        sys.exit(1)
+
+    try:
+        cv_splits = CVManager.load_from_json(str(folds_json_path))
+        num_outer_folds = len(cv_splits)
+        log.info(f"CV Topology read successfully: detected {num_outer_folds} execution folds.")
+    except Exception as e:
+        log.critical(f"FATAL: Artifact corruption detected. Failed to read CV folds JSON. Details: {e}")
+        sys.exit(1)
+
+    expected_models = [svm_results_dir / f"SVM_Model_Fold_{split['fold']}.joblib" for split in cv_splits]
+    if not all(m.exists() for m in expected_models):
+        log.error("FATAL: Trained SVM Models are missing or incomplete.")
+        log.error("XAI Extraction requires all folds to be trained. Please run SVM classification first.")
+        sys.exit(1)
+
+    log.info("Phase 1: Validating TPM Mask...")
     if not mask_path.exists():
-        log.warning(f"TPM Mask not found at '{mask_path.name}'. Booting TPM Generator...")
+        log.warning(f"TPM Mask not found at '{mask_path.name}'. Booting TPM Mask generator...")
         try:
             spm_dir = load_spm_environment()
             log.success(f"SPM environment loaded successfully mapped at: {spm_dir}")
-        except Exception as e:
-            log.critical(f"FATAL: Could not resolve SPM dependency. Details: {e}")
-            sys.exit(1)
         
-        tpm_path = spm_dir / "tpm" / "TPM.nii"
-        mask_generator = TpmMaskGenerator(logger=log)
+            tpm_path = spm_dir / "tpm" / "TPM.nii"
+            mask_generator = TpmMaskGenerator(logger=log)
         
-        try:
             mask_generator.generate_mask(
                 registry_csv_path=str(registry_csv_path),
                 tpm_nifti_path=str(tpm_path),
                 output_mask_path=str(mask_path)
             )
         except Exception as e:
-            log.critical(f"FATAL: Could not generate TPM mask natively. Details: {e}")
+            log.critical(f"FATAL: Could not generate TPM Mask. Details: {e}")
             sys.exit(1)
     else:
          log.success("Valid Cached TPM Mask found. Bypassing Generation.")
 
-    log.info("Loading Subject Registry and TPM Mask...")
+    log.info("Phase 2: Loading cohort registry and TPM Mask...")
     svm_engine = SVMClassifier(logger=log, param_grid={})
     _, X_full, y_full = svm_engine.load_data(str(registry_csv_path), str(mask_path))
     cv_splits = CVManager.load_from_json(str(folds_json_path))
 
-    log.info("Extracting XAI Spatial Patterns (Raw, Haufe, Gaonkar) PER FOLD...")
+    log.info("Phase 3: Extracting XAI patterns (Raw, Haufe, Gaonkar) per fold...")
     explainer = SVMExplainer(logger=log)
-    renderer = ModelRenderer(logger=log, output_dir=str(plots_dir))
+    renderer = ModelRenderer(logger=log, output_dir=str(xai_plots_dir))
 
-    log.info("Reading Affine Matrix and Spatial Geometry from TPM Mask header...")
     mask_img = nib.load(str(mask_path))
     mask_bool = mask_img.get_fdata() > 0
     mask_affine = mask_img.affine
 
-    # Dynamically locate CTRL-117 using the Single Source of Truth (Registry)
     registry_df = pd.read_csv(registry_csv_path)
     ctrl_candidates = registry_df[registry_df['subject_id'].str.contains("CTRL-117")]
     
     bg_path = str(ctrl_candidates.iloc[0]['file_path']) if not ctrl_candidates.empty else None
 
     for split in cv_splits:
-        fold_id = split['fold_id']
-        train_idx = split['train_idx']
+        fold_id = split['fold']
+        train_idx = split['outer_train_idx']
 
-        # Load pre-trained pipeline
-        model_path = results_dir / f"SVM_Model_Fold_{fold_id}.joblib"
-        if not model_path.exists():
-            log.error(f"Trained model not found at {model_path}. Please run run_svm_pipeline.py first.")
-            continue
+        model_path = svm_results_dir / f"SVM_Model_Fold_{fold_id}.joblib"
         
-        log.info(f"--- Extracting XAI Patterns for Fold {fold_id} ---")
+        log.info(f"--- Extracting XAI patterns for Fold {fold_id} ---")
         trained_pipeline = joblib.load(str(model_path))
         
-        # Determine the C parameter used
         optimal_c = trained_pipeline.named_steps['svc'].C
         
         X_train_fold = X_full[train_idx]
@@ -135,12 +179,12 @@ def run_svm_xai():
             alpha=0.1
         )
         
-        raw_nii_top1 = str(results_dir / f"SVM_Raw_Weights_Fold_{fold_id}_Top1.nii")
-        raw_nii_top5 = str(results_dir / f"SVM_Raw_Weights_Fold_{fold_id}_Top5.nii")
-        haufe_nii_top1 = str(results_dir / f"SVM_Haufe_Fold_{fold_id}_Top1.nii")
-        haufe_nii_top5 = str(results_dir / f"SVM_Haufe_Fold_{fold_id}_Top5.nii")
-        gaonkar_nii_bonf005 = str(results_dir / f"SVM_Gaonkar_Fold_{fold_id}_bonf005.nii")
-        gaonkar_nii_fdr01 = str(results_dir / f"SVM_Gaonkar_Fold_{fold_id}_fdr01.nii")
+        raw_nii_top1 = str(xai_results_dir / f"SVM_Raw_Weights_Fold_{fold_id}_Top1.nii")
+        raw_nii_top5 = str(xai_results_dir / f"SVM_Raw_Weights_Fold_{fold_id}_Top5.nii")
+        haufe_nii_top1 = str(xai_results_dir / f"SVM_Haufe_Fold_{fold_id}_Top1.nii")
+        haufe_nii_top5 = str(xai_results_dir / f"SVM_Haufe_Fold_{fold_id}_Top5.nii")
+        gaonkar_nii_bonf005 = str(xai_results_dir / f"SVM_Gaonkar_Fold_{fold_id}_bonf005.nii")
+        gaonkar_nii_fdr01 = str(xai_results_dir / f"SVM_Gaonkar_Fold_{fold_id}_fdr01.nii")
 
         
         explainer.reconstruct_and_save_3d(raw_weights_top1, mask_bool, mask_affine, raw_nii_top1)
@@ -182,6 +226,4 @@ def run_svm_xai():
                 bg_path, gaonkar_nii_fdr01, str(mask_path), f"Gaonkar Z-Score (Fold {fold_id}) FDR 0.1", 
                 f"SVM_Gaonkar_Fold_{fold_id}_fdr01.png", slice_config=slice_config
             )
-
-if __name__ == "__main__":
-    run_svm_xai()
+    log.success("--- SVM XAI EXTRACTION COMPLETE ---")
