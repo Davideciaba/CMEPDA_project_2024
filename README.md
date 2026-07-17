@@ -163,8 +163,8 @@ The Machine Learning Model and the Explainable-AI approaches comes from the foll
 
 - **Haufe, S., Meinecke, F., Görgen, K., Dähne, S., Haynes, J.-D., Blankertz, B., & Bießmann, F.** (2014). On the interpretation of weight vectors of linear models in multivariate neuroimaging. NeuroImage, 87, 96–110. [DOI](http://dx.doi.org/10.1016/j.neuroimage.2013.10.067)
 
-- **Gaonkar, B., & Davatzikos, C.** (2013). Analytic estimation of statistical significance maps for support vector machine based multi-variate image analysis and classification. NeuroImage, 78, 270-283. [DOI](10.1016/j.media.2015.06.008.)
+- **Gaonkar, B., & Davatzikos, C.** (2013). Analytic estimation of statistical significance maps for support vector machine based multi-variate image analysis and classification. NeuroImage, 78, 270-283. [DOI](https://doi.org/10.1016/j.media.2015.06.008)
 
 - **Bloch, L., & Friedrich, C. M.** (2024). Systematic comparison of 3D Deep learning and classical machine learning explanations for Alzheimer's Disease detection. Scientific Reports, 14. [DOI](https://doi.org/10.1016/j.compbiomed.2024.108029)
 
-- **Ridgway, G., Omar, R., Ourselin, S., Hill, D., Warren, J., & Fox, N.** (2009). Issues with threshold masking in voxel-based morphometry of atrophied brains. NeuroImage, 44(1), 99–111. [DOI](10.1016/j.neuroimage.2008.08.045)
+- **Ridgway, G., Omar, R., Ourselin, S., Hill, D., Warren, J., & Fox, N.** (2009). Issues with threshold masking in voxel-based morphometry of atrophied brains. NeuroImage, 44(1), 99–111. [DOI](https://doi.org/10.1016/j.neuroimage.2008.08.045)
