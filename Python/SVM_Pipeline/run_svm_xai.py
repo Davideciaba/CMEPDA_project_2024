@@ -166,7 +166,6 @@ def run_svm_xai(
         
         raw_weights = trained_pipeline.named_steps['svc'].coef_[0]
         decision_scores = trained_pipeline.decision_function(X_train_fold)
-        n_support_total = int(np.sum(trained_pipeline.named_steps['svc'].n_support_))
         
         # 1. RAW WEIGHTS
         raw_weights_top1 = np.where(np.abs(raw_weights) >= np.percentile(np.abs(raw_weights), 99), raw_weights, 0)
@@ -183,7 +182,6 @@ def run_svm_xai(
             y_train=y_train_fold, 
             svm_weights=raw_weights, 
             C_param=optimal_c, 
-            n_support=n_support_total,
             correction='bonferroni', 
             alpha=0.05
         )
@@ -192,7 +190,6 @@ def run_svm_xai(
             y_train=y_train_fold, 
             svm_weights=raw_weights, 
             C_param=optimal_c, 
-            n_support=n_support_total,
             correction='fdr_by', 
             alpha=0.1
         )

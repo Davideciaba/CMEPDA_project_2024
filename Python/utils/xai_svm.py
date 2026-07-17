@@ -63,7 +63,7 @@ class SVMExplainer:
         return haufe_map
 
     def compute_gaonkar_maps(self, X_train: np.ndarray, y_train: np.ndarray, 
-                             svm_weights: np.ndarray, C_param: float, n_support: int,
+                             svm_weights: np.ndarray, C_param: float,
                              correction: str = 'bonferroni', alpha: float = 0.05) -> Tuple[np.ndarray, np.ndarray]:
         """
         Computes the Analytic Statistical Significance Maps for SVM.
@@ -78,7 +78,6 @@ class SVMExplainer:
             y_train (np.ndarray): Binary labels in {-1, 1} or {0, 1} format (m_samples,).
             svm_weights (np.ndarray): The optimized weight vector w* from the linear SVM (d_features,).
             C_param (float): The regularization parameter for the SVM.
-            n_support (int): The total number of support vectors from the trained SVM.
             correction (str): The multiple testing correction method ('bonferroni', 'fdr_by').
             alpha (float): The significance level for the multiple testing correction.
             
@@ -97,9 +96,6 @@ class SVMExplainer:
         if ratio > 0.2:
             self.logger.warning(f"m/d ratio ({ratio:.4f}) exceeds 0.2. Gaonkar assumption might be unstable.")
         
-        sv_ratio = n_support / m_samples
-        if sv_ratio < 0.95:
-            self.logger.warning(f"HDLSS Violation: Support Vectors are only {sv_ratio:.1%} of samples (Requires >= 95.0%).")
          
         # 1. Compute Gram Matrix (K = X @ X^T)
         # Added (1/C)*I to map standard dot product into the soft-margin SVM L2 dual space

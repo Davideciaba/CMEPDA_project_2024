@@ -24,17 +24,14 @@ def run_xai_comparison(
     Executes the absolute comparative evaluation pipeline.
     
     PURPOSE:
-        Extracts signals from multiple NIfTI maps, maps them to anatomical regions,
-        evaluates directional impact, computes ranking correlations (nDCG), and 
-        renders global analytic graphics (Bloch Heatmaps, Diverging Bars).
+        Extracts signals from NIfTI maps using a dual-logic approach:
+        1. Net Impact (Directional): For Diverging Bar charts.
+        2. Bloch Methodology (Absolute Mean): For Global Feature Importance Heatmaps & nDCG.
         
     Args:
         enable_file_logging (bool): If True, logs are written to disk.
         output_dir (Optional[Path]): Directory where results will be written.
         input_dir (Optional[Path]): Directory containing atlas and CSV inputs.
-        
-    Returns:
-        None
     """
     current_dir = Path(__file__).parent.resolve()
     base_out = output_dir.resolve() if output_dir else current_dir
@@ -62,21 +59,11 @@ def run_xai_comparison(
             log.add_file_handler(str(log_path), level="DEBUG")
         except OSError as e:
             log.critical(f"I/O ERROR: Cannot write to {log_path.name}")
-            log.critical("Pipeline aborted. Ensure you have write permissions.")
             sys.exit(1)
     else:
         comp_base.mkdir(parents=True, exist_ok=True)
-        dummy_file = comp_base / ".dummy_write_test"
-        try:
-            with open(dummy_file, 'w') as f: pass
-            dummy_file.unlink()
-            log.info("Dummy write test passed. Filesystem allows writing.")
-        except OSError as e:
-            log.critical(f"I/O ERROR: Cannot write to {comp_base}.")
-            log.critical(f"Pipeline aborted. Ensure you have write permissions. Details: {e}")
-            sys.exit(1)
 
-    log.info("--- Booting XAI Comparison Pipeline ---")
+    log.info("--- Booting XAI Comparison Pipeline (Dual Logic: Net Impact & Bloch) ---")
 
     reset_directory(results_dir, log)
     reset_directory(plots_dir, log)
@@ -96,12 +83,13 @@ def run_xai_comparison(
         log.warning(f"VBM Ground Truth file not found at: {vbm_path}")
         log.warning("Proceeding with model-to-model comparison only.")
     else:
-        log.info("Extracting ROI importance from VBM (Ground Truth)...")
+        log.info("Extracting ROI importance from VBM (Ground Truth) using Bloch Logic...")
         try:
-            df_vbm = analyzer.extract_regional_importance(str(vbm_path), str(atlas_path), str(atlas_csv_path), use_absolute=False)
-            df_vbm['Abs_Mean_ROI_Signal'] = df_vbm['Mean_ROI_Signal'].abs()
+            # BLOCH LOGIC: use_absolute=True (Mean of Absolute values)
+            df_vbm = analyzer.extract_regional_importance(str(vbm_path), str(atlas_path), str(atlas_csv_path), use_absolute=True)
             
-            vbm_scores = df_vbm.set_index('ROI_Name')['Abs_Mean_ROI_Signal']
+            # Since use_absolute=True, 'Mean_ROI_Signal' is already the Bloch magnitude
+            vbm_scores = df_vbm.set_index('ROI_Name')['Mean_ROI_Signal']
             vbm_min, vbm_max = vbm_scores.min(), vbm_scores.max()
             vbm_norm = (vbm_scores - vbm_min) / (vbm_max - vbm_min) if vbm_max > vbm_min else vbm_scores * 0.0
             
@@ -127,38 +115,43 @@ def run_xai_comparison(
             continue
             
         log.info(f"Processing: {method_name}")
-        df_agg_real = analyzer.aggregate_and_normalize_maps(paths_list, str(atlas_path), str(atlas_csv_path), metric='Mean_ROI_Signal', use_absolute=False)
+        safe_name = method_name.replace(" ", "_").replace("(", "").replace(")", "").replace("%", "")
         
-        if not df_agg_real.empty:
-            safe_name = method_name.replace(" ", "_").replace("(", "").replace(")", "").replace("%", "")
-            
+        # --- 1. DIVERGING PLOTS (NET IMPACT LOGIC) ---
+        # use_absolute=False: Preserves signs to show direction (AD vs CTRL)
+        df_directional = analyzer.aggregate_and_normalize_maps(paths_list, str(atlas_path), str(atlas_csv_path), metric='Mean_ROI_Signal', use_absolute=False)
+        if not df_directional.empty:
             div_out_path = f"Directional/Diverging_Mean_{safe_name}.png"
-            plotter.plot_diverging_bars(df_agg_real, score_col='Mean_ROI_Signal', title=method_name, filename=div_out_path, top_k=20)
+            plotter.plot_diverging_bars(df_directional, score_col='Mean_ROI_Signal', title=method_name, filename=div_out_path, top_k=20)
 
-            s_abs = df_agg_real.set_index('ROI_Name')['Mean_ROI_Signal'].abs()
-            s_min, s_max = s_abs.min(), s_abs.max()
-            s_norm = (s_abs - s_min) / (s_max - s_min) if s_max > s_min else s_abs * 0.0
-            aggregated_for_matrix[method_name] = s_norm
+        # --- 2. HEATMAP & NDCG MATRIX (BLOCH LOGIC) ---
+        # use_absolute=True: Averages the absolute values of the voxels to prevent signal cancellation
+        df_bloch_agg = analyzer.aggregate_and_normalize_maps(paths_list, str(atlas_path), str(atlas_csv_path), metric='Mean_ROI_Signal', use_absolute=True)
+        if not df_bloch_agg.empty:
+            # The aggregator automatically creates 'Normalized_Importance' when use_absolute=True
+            aggregated_for_matrix[method_name] = df_bloch_agg.set_index('ROI_Name')['Normalized_Importance']
 
+        # --- 3. INDIVIDUAL FOLD ANALYSIS ---
         for fold_path in paths_list:
             fold_name = fold_path.stem 
             
-            df_fold = analyzer.extract_regional_importance(str(fold_path), str(atlas_path), str(atlas_csv_path), use_absolute=False)
-            if df_fold.empty: continue
-            
-            df_fold['Abs_Mean_ROI_Signal'] = df_fold['Mean_ROI_Signal'].abs()
+            # Use Bloch logic (use_absolute=True) for Top20 plots and CSV exports
+            df_fold_bloch = analyzer.extract_regional_importance(str(fold_path), str(atlas_path), str(atlas_csv_path), use_absolute=True)
+            if df_fold_bloch.empty: continue
             
             safe_fold_name = fold_name.replace(" ", "_").replace("(", "").replace(")", "").replace("%", "")
             
             # Save Fold CSVs dynamically 
-            csv_out_path = results_dir / f"{safe_fold_name}_FeatureImportance.csv"
+            csv_out_path = results_dir / f"{safe_fold_name}_Bloch_FeatureImportance.csv"
             csv_out_path.parent.mkdir(parents=True, exist_ok=True)
-            df_fold.to_csv(str(csv_out_path), index=False)
+            df_fold_bloch.to_csv(str(csv_out_path), index=False)
             
-            plot_out_path = f"Folds/Top20_AbsNetMean_{safe_fold_name}.png"
-            plotter.plot_top_rois(df_fold, score_col='Abs_Mean_ROI_Signal', title=fold_name, filename=plot_out_path, top_k=20)
+            plot_out_path = f"Folds/Top20_Bloch_{safe_fold_name}.png"
+            # Since use_absolute=True, 'Mean_ROI_Signal' is the absolute magnitude
+            plotter.plot_top_rois(df_fold_bloch, score_col='Mean_ROI_Signal', title=f"{fold_name} (Bloch)", filename=plot_out_path, top_k=20)
             
-            fold_scores = df_fold.set_index('ROI_Name')['Abs_Mean_ROI_Signal']
+            # Normalize fold for the Global Heatmap
+            fold_scores = df_fold_bloch.set_index('ROI_Name')['Mean_ROI_Signal']
             f_min, f_max = fold_scores.min(), fold_scores.max()
             fold_norm = (fold_scores - f_min) / (f_max - f_min) if f_max > f_min else fold_scores * 0.0
             
@@ -166,7 +159,7 @@ def run_xai_comparison(
             heatmap_columns[f"{method_name} (F{fold_num})"] = fold_norm
     
     if len(aggregated_for_matrix) > 1:
-        log.info("Phase 3: Building nDCG Correlation Matrix across all methods...")
+        log.info("Phase 3: Building nDCG Correlation Matrix across all methods (Bloch Logic)...")
         matrix_df = pd.DataFrame(aggregated_for_matrix).fillna(0.0)
         method_keys = list(matrix_df.columns)
         ndcg_matrix = pd.DataFrame(index=method_keys, columns=method_keys, dtype=float)
@@ -179,10 +172,10 @@ def run_xai_comparison(
                 score = analyzer.calculate_ndcg(pred_scores, true_scores, k=full_k)
                 ndcg_matrix.loc[ref_m, comp_m] = score
                 
-        out_matrix_path = "nDCG_Correlation_Matrix.png"
-        plotter.plot_ndcg_matrix(ndcg_matrix, out_matrix_path, title_suffix=f"Net Impact |Mean| (K={full_k})")
+        out_matrix_path = "nDCG_Correlation_Matrix_Bloch.png"
+        plotter.plot_ndcg_matrix(ndcg_matrix, out_matrix_path, title_suffix=f"Bloch Logic (K={full_k})")
     else:
-        log.warning("Phase 3 Skipped: Not enough valid maps to compute nDCG Correlation Matrix (requires > 1).")
+        log.warning("Phase 3 Skipped: Not enough valid maps to compute nDCG Correlation Matrix.")
 
     if len(heatmap_columns) > 1:
         log.info("Phase 4: Building global Heatmap (all folds)...")
@@ -197,10 +190,10 @@ def run_xai_comparison(
         if len(heatmap_matrix) > top_k_heat:
             heatmap_matrix = heatmap_matrix.head(top_k_heat)
             
-        out_heat_path = "Heatmap_AllFolds.png"
-        plotter.plot_heatmap(heatmap_matrix, out_heat_path, title_suffix="Net Impact |Mean|")
+        out_heat_path = "Heatmap_Bloch_AllFolds.png"
+        plotter.plot_heatmap(heatmap_matrix, out_heat_path, title_suffix="Bloch Logic")
     else:
-        log.warning("Phase 4 Skipped: Not enough valid maps to generate Heatmap (requires > 1).")
+        log.warning("Phase 4 Skipped: Not enough valid maps to generate Heatmap.")
 
     log.success("--- XAI Comparison Completed ---")
 
