@@ -73,12 +73,10 @@ class TestSVMAnalyticalXAI(unittest.TestCase):
             svm_weights = np.random.randn(N_FEATURES)
     
             SVM_C_PARAM = 1.0
-            SUPPORT_VECTORS = 8
     
             z_map, p_map_raw = self.xai_engine.compute_gaonkar_maps(
                 X_train, y_train, svm_weights, 
-                C_param=SVM_C_PARAM, 
-                n_support=SUPPORT_VECTORS
+                C_param=SVM_C_PARAM
             )
             self.assertEqual(z_map.shape[0], N_FEATURES)
 
