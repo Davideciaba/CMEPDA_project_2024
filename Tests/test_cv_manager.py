@@ -56,10 +56,6 @@ class TestCVManager(unittest.TestCase):
         """
         Verifies the security and integrity of the JSON CV Artifacts.
         
-        PURPOSE:
-            Tests the SSOT (Single Source of Truth) export mechanism, ensuring that 
-            'security_test_subjects' are correctly embedded to guard against 
-            subsequent data leakage when models are trained.
         """
         cv = CVManager(outer_folds=2, inner_folds=2)
         y = np.array([0, 0, 0, 0, 1, 1, 1, 1])

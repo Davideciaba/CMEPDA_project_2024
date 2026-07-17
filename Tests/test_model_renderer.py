@@ -49,7 +49,7 @@ class TestModelRenderer(unittest.TestCase):
     @patch('Python.utils.model_renderer.nib.load')
     def test_plot_3d_activation_map_dimension_mismatch(self, mock_nib_load, mock_savefig) -> None:
         """
-        Simulates the LBYL (Look Before You Leap) logic and verifies dimensional mismatches.
+        Verifies dimensional mismatches.
         
         PURPOSE:
             Guarantees that attempting to render a statistical map over an incompatible 
