@@ -1,21 +1,54 @@
+"""
+Module: roi_analyzer.py
+
+Extracts, aggregates, and mathematically evaluates regional feature importance 
+from dense 3D XAI tensors. Maps continuous voxel-level data to discrete 
+Regions of Interest (ROIs) using standard SPM Atlases.
+"""
 import os
 import numpy as np
 import pandas as pd
 import nibabel as nib
-from typing import Dict, List
+from typing import Dict, Tuple, List
 
 from Python.utils.py_logger import CustomLogger
 
 class ROIAnalyzer:
     """
     Extracts regional feature importance from dense 3D XAI tensors using discrete SPM Atlases.
-    Includes methods for comparing different XAI maps and aggregating across CV folds.
+    
+    PURPOSE:
+        Acts as the analytical bridge between continuous 3D XAI maps (e.g., Haufe, Gaonkar) 
+        and discrete neuroanatomical regions. Includes methods for comparing different 
+        XAI maps via nDCG and aggregating results across Nested CV folds.
     """
     
     def __init__(self, logger: CustomLogger):
+        """
+        Initializes the ROIAnalyzer.
+        
+        Args:
+            logger (CustomLogger): Instance of the custom logging utility.
+        """
         self.logger = logger
 
     def _load_atlas_labels(self, label_csv_path: str) -> Dict[int, str]:
+        """
+        Loads the SPM Atlas dictionary mapping integer IDs to anatomical names.
+        
+        PURPOSE:
+            Reads the metadata CSV to translate numerical ROI labels inside the 
+            NIfTI atlas back into human-readable anatomical regions.
+            
+        Args:
+            label_csv_path (str): Absolute path to the CSV containing atlas labels.
+            
+        Returns:
+            Dict[int, str]: Dictionary mapping ROI IDs to their string names.
+            
+        Raises:
+            FileNotFoundError: If the CSV file is missing.
+        """
         if not os.path.exists(label_csv_path):
             raise FileNotFoundError(f"Atlas label CSV not found at: {label_csv_path}")
             
@@ -29,10 +62,22 @@ class ROIAnalyzer:
     def extract_regional_importance(self, xai_map_path: str, atlas_map_path: str, 
                                     label_csv_path: str, use_absolute: bool = True) -> pd.DataFrame:
         """
-        Calculates the feature importance for each Region of Interest defined by the SPM Atlas.
-        Filters out White Matter, Ventricles, and Cerebellum to focus on Gray Matter.
-        If use_absolute is True, computes metrics on absolute values (for magnitude/ranking).
-        If use_absolute is False, computes metrics on raw values (to keep signs for directional impact).
+        Calculates the feature importance for each Region of Interest.
+        
+        PURPOSE:
+            Extracts voxel data guided by the SPM Atlas. Filters out non-relevant tissues 
+            (White Matter, Ventricles, Cerebellum) to strictly focus on Gray Matter.
+            If use_absolute is True, computes metrics on absolute values (for magnitude/ranking).
+            If use_absolute is False, computes metrics on raw values (keeping signs for directional impact).
+            
+        Args:
+            xai_map_path (str): Path to the 3D XAI NIfTI map.
+            atlas_map_path (str): Path to the discrete SPM Atlas NIfTI map.
+            label_csv_path (str): Path to the CSV mapping atlas IDs to names.
+            use_absolute (bool): Toggles absolute magnitude extraction vs directional extraction.
+                
+        Returns:
+            pd.DataFrame: Table containing ROI_ID, ROI_Name, Mean_ROI_Signal, Sum_ROI_Signal.
         """
         roi_dict = self._load_atlas_labels(label_csv_path)
         xai_img = nib.load(xai_map_path)
@@ -41,8 +86,8 @@ class ROIAnalyzer:
         xai_vol = xai_img.get_fdata()
         atlas_vol = np.round(atlas_img.get_fdata()).astype(int)
         
-        # Come specificato da Bloch, per valutare l'importanza globale prendiamo il valore assoluto
-        # Altrimenti, manteniamo i segni per vedere se la feature spinge verso l'AD o verso il CN
+        # As specified by Bloch, use absolute values for global importance to avoid signal cancellation.
+        # Otherwise, keep signs to see if the feature pushes towards AD or CTRL.
         if use_absolute:
             work_vol = np.abs(xai_vol)
         else:
@@ -52,7 +97,7 @@ class ROIAnalyzer:
         
         unique_atlas_ids = np.unique(atlas_vol)
         
-        # Filtriamo le regioni che non sono Gray Matter o non pertinenti
+        # Filter out regions that are not Gray Matter or not pertinent to the study
         exclude_keywords = [
             'white matter', 'wm', 'ventricle', 'vent', 'cerebellum', 'cerebellar', 
             'brain-stem', 'chiasm', 'vessel', 'csf', 'unknown', 'background'
@@ -87,8 +132,7 @@ class ROIAnalyzer:
             
         df_results = pd.DataFrame(results)
         if not df_results.empty:
-            # Anche se manteniamo i segni, ordiniamo in base al valore assoluto per avere in cima
-            # le regioni più "forti" (più o meno)
+            # Even if signs are kept, sort by absolute magnitude to keep the most "impactful" regions on top
             df_results['abs_sort'] = df_results['Mean_ROI_Signal'].abs()
             df_results = df_results.sort_values(by='abs_sort', ascending=False).drop(columns=['abs_sort']).reset_index(drop=True)
             
@@ -96,8 +140,23 @@ class ROIAnalyzer:
 
     def aggregate_and_normalize_maps(self, map_paths: List[str], atlas_map_path: str, label_csv_path: str, metric: str = 'Mean_ROI_Signal', use_absolute: bool = True) -> pd.DataFrame:
         """
-        Estrae l'importanza regionale per una lista di mappe (es. i 5 fold), ne fa la media.
-        Se use_absolute è True, normalizza i risultati tra 0 e 1 (Min-Max Scaling).
+        Averages regional importance across multiple cross-validation folds.
+        
+        PURPOSE:
+            Aggregates fold-specific XAI maps into a single global representation.
+            Applies Min-Max scaling [0, 1] if magnitude evaluation is requested,
+            ensuring mathematical comparability across different methods.
+            
+        Args:
+            map_paths (List[str]): List of absolute paths to the XAI NIfTI files.
+            atlas_map_path (str): Path to the discrete SPM Atlas NIfTI map.
+            label_csv_path (str): Path to the CSV mapping atlas IDs to names.
+            metric (str): The DataFrame column to aggregate (default: 'Mean_ROI_Signal').
+            use_absolute (bool): Determines magnitude vs directional aggregation.
+            
+        Returns:
+            pd.DataFrame: Aggregated results. Contains 'Normalized_Importance' if 
+                          use_absolute=True, otherwise contains the raw averaged metric.
         """
         if not map_paths:
             self.logger.warning("Lista di mappe vuota fornita all'aggregatore.")
@@ -119,12 +178,12 @@ class ROIAnalyzer:
         if not all_series:
             return pd.DataFrame()
             
-        # Concatena tutti i fold come colonne e fai la media per ogni ROI
+        # Concatenate all folds as columns and compute the row-wise mean (across CV)
         combined_df = pd.concat(all_series, axis=1)
         mean_series = combined_df.mean(axis=1)
         
         if use_absolute:
-            # Normalizzazione Min-Max (0 - 1) per le Heatmap
+            # Min-Max Normalization (0 - 1) required for Heatmaps
             min_val = mean_series.min()
             max_val = mean_series.max()
             if max_val > min_val:
@@ -134,32 +193,63 @@ class ROIAnalyzer:
             result_df = norm_series.reset_index()
             result_df.columns = ['ROI_Name', 'Normalized_Importance']
         else:
-            # Ritorna la media con i segni originali per i Bar Plot divergenti
+            # Return raw averaged values preserving original signs for Diverging Bar Plots
             result_df = mean_series.reset_index()
             result_df.columns = ['ROI_Name', metric]
             
         return result_df
 
     def _dcg(self, scores: np.ndarray) -> float:
+        """
+        Computes the Discounted Cumulative Gain (DCG) for a vector of scores.
+        """
         return np.sum(scores / np.log2(np.arange(2, len(scores) + 2)))
 
     def calculate_ndcg(self, predicted_scores: np.ndarray, true_scores: np.ndarray, k: int) -> float:
+        """
+        Calculates the Normalized Discounted Cumulative Gain (nDCG@K).
+        
+        PURPOSE:
+            Evaluates the ranking quality of a predictive XAI model against the Ground Truth.
+            Uses a logarithmic decay to penalize errors in the most important (Top K) regions.
+            
+        Args:
+            predicted_scores (np.ndarray): Importance scores generated by the XAI method.
+            true_scores (np.ndarray): True importance scores (e.g., from VBM).
+            k (int): Number of top elements to consider.
+            
+        Returns:
+            float: nDCG score between 0.0 (total disagreement) and 1.0 (perfect ranking).
+        """
         if len(predicted_scores) == 0 or len(true_scores) == 0: return 0.0
-        # Ordiniamo gli indici in base ai punteggi reali (Ground Truth)
+        
+        # Determine the IDEAL ranking based strictly on Ground Truth scores
         ideal_order = np.argsort(true_scores)[::-1]
         ideal_scores = true_scores[ideal_order][:k]
         idcg = self._dcg(ideal_scores)
         if idcg == 0: return 0.0
         
-        # Ordiniamo gli indici in base ai punteggi predetti (XAI)
+        # Determine the ACTUAL ranking proposed by the XAI model
         pred_order = np.argsort(predicted_scores)[::-1]
-        # Prendiamo i valori "reali" ma ordinati secondo la XAI
+        # Retrieve the True scores ordered by the XAI's ranking logic
         actual_scores = true_scores[pred_order][:k]
         dcg = self._dcg(actual_scores)
         
         return dcg / idcg
 
     def compare_maps_ndcg(self, map1_df: pd.DataFrame, map2_df: pd.DataFrame, metric: str = 'Mean_ROI_Signal', k: int = 10) -> float:
+        """
+        Wrapper to compute nDCG directly between two Pandas DataFrames containing ROI metrics.
+        
+        Args:
+            map1_df (pd.DataFrame): DataFrame for the predicted map.
+            map2_df (pd.DataFrame): DataFrame for the reference/ground truth map.
+            metric (str): The column name to use for comparison.
+            k (int): Number of top elements to evaluate.
+            
+        Returns:
+            float: The calculated nDCG score.
+        """
         merged = pd.merge(map1_df, map2_df, on='ROI_ID', suffixes=('_pred', '_true'))
         if merged.empty: return 0.0
         return self.calculate_ndcg(merged[f'{metric}_pred'].values, merged[f'{metric}_true'].values, k)

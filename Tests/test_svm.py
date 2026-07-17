@@ -1,7 +1,9 @@
 """
+Module: test_svm.py
+
 Unit and Integration Testing Suite for the SVM Predictive Engine.
-Validates encapsulated methods, decoupled APIs (train/predict), and executes E2E pipelines.
-Designed for a flat directory structure (tests and models in the same folder).
+Validates encapsulated methods, decoupled APIs (train/predict), and executes 
+E2E pipelines using randomized datasets. Designed for a flat directory structure.
 """
 import os
 import unittest
@@ -11,20 +13,30 @@ import pandas as pd
 import math
 from sklearn.svm import SVC
 from sklearn.pipeline import Pipeline
+
 from Python.Models.svm_classifier import SVMClassifier
 from Python.utils.py_logger import CustomLogger
 
 class TestSVMEngine(unittest.TestCase):
+    """
+    Test suite for Python.Models.svm_classifier.SVMClassifier.
     
-    def setUp(self):
+    PURPOSE:
+        Validates clinical metric calculations, pipeline un-packing, GridSearch 
+        execution, and edge-case metric guarding (like single-class AUROC).
+    """
+    
+    def setUp(self) -> None:
         """Initializes the Engine with a Mock Logger and reduced fold parameters."""
         self.logger = CustomLogger(name="TestSVM")
         self.logger.add_console_handler(level="INFO")
         default_param_grid = {'C': [0.1, 1.0]}
         self.engine = SVMClassifier(logger=self.logger, param_grid=default_param_grid)
 
-    def test_evaluate_classification_standard(self):
-        """Validates the mathematical calculation of clinical metrics."""
+    def test_evaluate_classification_standard(self) -> None:
+        """
+        Validates the mathematical calculation of clinical metrics.
+        """
         y_true = np.array([0, 0, 1, 1])
         y_pred = np.array([0, 1, 1, 1])
         y_decision = np.array([0.1, 0.8, 0.9, 0.85])
@@ -33,8 +45,14 @@ class TestSVMEngine(unittest.TestCase):
         self.assertEqual(metrics['Accuracy'], 0.75)
         self.assertEqual(metrics['Sensitivity'], 1.0)
 
-    def test_evaluate_single_class_auc_safety(self):
-        """Verifies AUROC fallback mechanism for zero-variance data folds."""
+    def test_evaluate_single_class_auc_safety(self) -> None:
+        """
+        Verifies AUROC fallback mechanism for zero-variance data folds.
+        
+        PURPOSE:
+            If a test set only contains 1 class, standard Scikit-Learn AUC throws 
+            a ValueError. This tests the protective try/except block.
+        """
         y_true = np.array([1, 1, 1, 1]) 
         y_pred = np.array([1, 1, 1, 1])
         y_decision = np.array([0.9, 0.8, 0.9, 0.85])
@@ -42,30 +60,34 @@ class TestSVMEngine(unittest.TestCase):
         metrics = self.engine._evaluate_classification(y_true, y_pred, y_decision)
         self.assertTrue(math.isnan(metrics['AUROC']))
 
-    def test_train_method(self):
-        """Ensures the decoupled training API correctly performs Grid Search and fitting."""
+    def test_train_method(self) -> None:
+        """
+        Ensures the decoupled training API correctly performs Grid Search and fitting.
+        
+        PURPOSE:
+            Validates that the returned model is a full standard Pipeline 
+            and not a vulnerable raw algorithm, thus preventing Data Leakage.
+        """
         X_train = np.random.randn(20, 10)
         y_train = np.array([0] * 10 + [1] * 10)
              
         self.engine.param_grid = {'C': [0.1, 1.0]}
                  
-        # FIX: Indici di split bilanciati per garantire che l'SVM veda entrambe le classi
+        # Balanced splits to ensure SVM sees both classes
         train_indices = np.array([0, 1, 2, 3, 4, 10, 11, 12, 13, 14])
         test_indices = np.array([5, 6, 7, 8, 9, 15, 16, 17, 18, 19])
         dummy_inner_cv = [(train_indices, test_indices)]
              
-       # FIX UNPACKING: Il metodo ora restituisce 4 valori
         best_c, mean_cv, std_cv, best_model = self.engine.train(X_train, y_train, inner_cv_iterator=dummy_inner_cv)
                  
         self.assertIn(best_c, [0.1, 1.0])
-        
-        # FIX ASSERTION: Il modello addestrato è una Pipeline (Scaler + SVC), non un SVC nudo.
         self.assertIsInstance(best_model, Pipeline)
         self.assertIsInstance(best_model.named_steps['svc'], SVC)
 
-    def test_predict_method(self):
-        """Validates the pure inference API structure and array returns."""
-        """Validates the pure inference API structure and array returns."""
+    def test_predict_method(self) -> None:
+        """
+        Validates the pure inference API structure and array returns.
+        """
         mock_model = MagicMock(spec=SVC)
         mock_model.predict.return_value = np.array([0, 1, 1])
         mock_model.decision_function.return_value = np.array([-0.9, 0.8, 0.7])
@@ -77,17 +99,18 @@ class TestSVMEngine(unittest.TestCase):
         self.assertEqual(len(y_pred), 3)
         self.assertEqual(y_prob[1], 0.8, "Probability extraction failed to target the positive class.")
              
-    # Rimosso il patch su 'os.path.exists'
     @patch('Python.Models.svm_classifier.pd.read_csv', side_effect=FileNotFoundError)
-    def test_load_real_data_file_missing(self, mock_read_csv):
+    def test_load_real_data_file_missing(self, mock_read_csv) -> None:
         """Validates that the Engine correctly aborts if data files are missing."""
         with self.assertRaises(FileNotFoundError):
             SVMClassifier.load_data("missing.csv", "missing_mask.nii")
 
     @patch('Python.Models.svm_classifier.pd.read_csv')
     @patch('Python.Models.svm_classifier.nib.load')
-    def test_load_real_data_success(self, mock_nib_load, mock_read_csv):
-        """Mocks the OS file system to validate structural 3D-to-1D flattening and parsing."""
+    def test_load_real_data_success(self, mock_nib_load, mock_read_csv) -> None:
+        """
+        Mocks the OS file system to validate structural 3D-to-1D flattening and parsing.
+        """
         mock_read_csv.return_value = pd.DataFrame({
             'subject_id': ['SUB_01', 'SUB_02'], 
             'file_path': ['fake1.nii', 'fake2.nii'], 
@@ -105,8 +128,14 @@ class TestSVMEngine(unittest.TestCase):
         self.assertEqual(subjects[0], "SUB_01")
         self.assertEqual(y_data[0], 1)
 
-    def test_execute_nested_cv_integration(self):
-        """Integration Test: Ensures the decoupled Double CV pipeline executes end-to-end."""
+    def test_execute_nested_cv_integration(self) -> None:
+        """
+        Integration Test: Ensures the decoupled Double CV pipeline executes end-to-end.
+        
+        PURPOSE:
+            Generates completely random internal matrices to test the full pipeline 
+            without relying on local datasets, guaranteeing robust code architecture.
+        """
         with self.logger.context(session_id="SVM_Integration"):
             N_SAMPLES, N_FEATURES = 20, 50
             np.random.seed(42)

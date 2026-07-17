@@ -1,5 +1,5 @@
 """
-Module: XAI_SVM.py
+Module: xai_svm.py
 
 Encapsulates Explainable AI (XAI) algorithms for Linear Support Vector Machines 
 in neuroimaging contexts. Implements both the Haufe Forward Transform and the 
@@ -17,20 +17,35 @@ from Python.utils.py_logger import CustomLogger
 class SVMExplainer:
     """
     Computes biologically interpretable spatial patterns from backward SVM models.
+    
+    PURPOSE:
+        Raw SVM weights act as noise suppressors rather than true activation indicators.
+        This class implements advanced linear algebra techniques (Haufe, Gaonkar) to 
+        invert the mapping and extract statistical significance maps that correlate 
+        structurally with the disease pathology.
     """
 
     def __init__(self, logger: CustomLogger):
-        """Initializes the SVMExplainer with a custom logger."""
+        """
+        Initializes the SVMExplainer with a custom logger.
+        
+        Args:
+            logger (CustomLogger): The unified project logger.
+        """
         self.logger = logger
 
     def compute_haufe_patterns(self, X_train: np.ndarray, decision_scores: np.ndarray) -> np.ndarray:
         """
         Computes the Haufe Forward Transform: A = Cov(X, s).
-        Transforms backward SVM weights (noise suppressors) into true biological activation patterns.
+        
+        PURPOSE:
+            Transforms backward SVM weights (noise suppressors) into true biological 
+            activation patterns by computing the covariance between the input features 
+            and the model's decision scores.
         
         Args:
-            X_train: Feature matrix of shape (m_samples, d_features).
-            decision_scores: SVM decision function outputs (m_samples,).
+            X_train (np.ndarray): Feature matrix of shape (m_samples, d_features).
+            decision_scores (np.ndarray): SVM decision function outputs (m_samples,).
             
         Returns:
             np.ndarray: Haufe activation pattern of shape (d_features,).
@@ -51,21 +66,26 @@ class SVMExplainer:
                              svm_weights: np.ndarray, C_param: float, n_support: int,
                              correction: str = 'bonferroni', alpha: float = 0.05) -> Tuple[np.ndarray, np.ndarray]:
         """
-        Computes the Analytic Statistical Significance Maps for SVM according to 
-        Gaonkar & Davatzikos (2013). Avoids computationally expensive permutation tests.
+        Computes the Analytic Statistical Significance Maps for SVM.
+        
+        PURPOSE:
+            Implements the methodology by Gaonkar & Davatzikos (2013). Computes p-values 
+            analytically for High-Dimension Low-Sample-Size (HDLSS) regimes, avoiding 
+            computationally expensive permutation testing. Includes multiple comparison corrections.
         
         Args:
-            X_train: Training feature matrix (m_samples, d_features).
-            y_train: Binary labels in {-1, 1} or {0, 1} format (m_samples,).
-            svm_weights: The optimized weight vector w* from the linear SVM (d_features,).
-            C_param: The regularization parameter for the SVM.
-            correction: The multiple testing correction method ('bonferroni', 'fdr').
-            alpha: The significance level for the multiple testing correction.
+            X_train (np.ndarray): Training feature matrix (m_samples, d_features).
+            y_train (np.ndarray): Binary labels in {-1, 1} or {0, 1} format (m_samples,).
+            svm_weights (np.ndarray): The optimized weight vector w* from the linear SVM (d_features,).
+            C_param (float): The regularization parameter for the SVM.
+            n_support (int): The total number of support vectors from the trained SVM.
+            correction (str): The multiple testing correction method ('bonferroni', 'fdr_by').
+            alpha (float): The significance level for the multiple testing correction.
             
         Returns:
-            Tuple containing:
-            - z_scores: The analytic Z-score for every voxel.
-            - pvals_corrected: The p-values after FWE (Bonferroni) correction.
+            Tuple[np.ndarray, np.ndarray]: 
+                - z_scores: The analytic Z-score for every voxel, thresholded at alpha.
+                - pvals_corrected: The p-values after FWE/FDR correction.
         """
         self.logger.info("Computing Gaonkar Analytic Significance Maps for HDLSS regime...")
         
@@ -76,25 +96,21 @@ class SVMExplainer:
         self.logger.debug(f"Gaonkar Sample-to-Feature Ratio (m/d): {ratio:.4f}")
         if ratio > 0.2:
             self.logger.warning(f"m/d ratio ({ratio:.4f}) exceeds 0.2. Gaonkar assumption might be unstable.")
-            #raise ValueError("Gaonkar method is designed for HDLSS (m/d < 0.2). Consider alternative XAI methods.")
         
         sv_ratio = n_support / m_samples
         if sv_ratio < 0.95:
             self.logger.warning(f"HDLSS Violation: Support Vectors are only {sv_ratio:.1%} of samples (Requires >= 95.0%).")
-            #raise ValueError("Gaonkar method requires >= 95% of samples to be support vectors for stability.")
          
         # 1. Compute Gram Matrix (K = X @ X^T)
         # Added (1/C)*I to map standard dot product into the soft-margin SVM L2 dual space
         K = X_train @ X_train.T + (1.0 / C_param) * np.eye(m_samples)
-
         # Use pseudoinverse for strict numerical stability
         K_inv = np.linalg.pinv(K)
             
         # 2. Compute Intermediate Matrix C
         J = np.ones((m_samples, 1))
         JT_K_inv_J = (J.T @ K_inv @ J).item()  # Scalar value
-        
-        
+                          
         # term2 = K^-1 * J * (-J^T * K^-1 * J)^-1 * J^T * K^-1
         scalar_inv = 1.0 / (-JT_K_inv_J)
         term2 = (K_inv @ J) * scalar_inv @ (J.T @ K_inv)
@@ -108,6 +124,7 @@ class SVMExplainer:
         unique_labels = np.unique(y_train)
         pos_class = unique_labels[1] if len(unique_labels) > 1 else 1
         p_frac = np.sum(y_train == pos_class) / m_samples
+        
         # Sum of squared elements of C over the samples (axis=1)
         sum_C2 = np.sum(C**2, axis=1)
         sigma2 = (4 * p_frac - 4 * p_frac**2) * sum_C2  # Shape: (d_features,)
@@ -136,20 +153,27 @@ class SVMExplainer:
         # We suppress all voxels that failed the statistical correction to 0.0
         z_scores_thresholded = np.zeros_like(z_scores)
         z_scores_thresholded[reject_null] = z_scores[reject_null]
-
         return z_scores_thresholded, pvals_corrected
 
     def reconstruct_and_save_3d(self, flat_map: np.ndarray, brain_mask: np.ndarray, 
-                                affine: np.ndarray, out_path: str) -> None:
+                                 affine: np.ndarray, out_path: str) -> None:
         """
-        Inflates a 1D flattened feature array back into a 3D NIfTI volume using 
-        the reference boolean brain mask.
+        Inflates a 1D flattened feature array back into a 3D NIfTI volume.
+        
+        PURPOSE:
+            Takes the 1D vectors outputted by the SVM/XAI processes and accurately 
+            places them back into their original spatial coordinates utilizing the 
+            boolean reference mask.
         
         Args:
-            flat_map: The 1D feature array (d_features,).
-            brain_mask: Boolean 3D tensor of the valid brain space.
-            affine: 4x4 spatial affine matrix (MNI space).
-            out_path: Full export path for the .nii.gz file.
+            flat_map (np.ndarray): The 1D feature array (d_features,).
+            brain_mask (np.ndarray): Boolean 3D tensor of the valid brain space.
+            affine (np.ndarray): 4x4 spatial affine matrix (MNI space).
+            out_path (str): Full export path for the .nii file.
+            
+        Raises:
+            ValueError: If the 1D map dimension mismatches the mask's active voxels.
+            Exception: If disk I/O fails during saving.
         """
         self.logger.info(f"Reconstructing 3D tensor to save at: {out_path}")
         

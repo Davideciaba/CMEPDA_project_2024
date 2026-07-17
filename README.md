@@ -113,11 +113,44 @@ To preserve the original positive/negative signature for each region, these abso
 </div>
 
 # Usage
+Due to the dimension of the model's weights we were not able to upload them on github. To avoid the problem and make the user able to test the code using our tuning results we upload them at the following links: [Weights](https://drive.google.com/drive/folders/1vJJEUFFgmrWvrM_9QjdptaV1J5LFpE6y?usp=sharing). The user has to move the folders to the root directory of the project before running the code.
 
-Clone this repository and run the main orchestrator using default parameters:
+Clone this repository and run the main orchestrator using default parameters (In case you are running this code for the first time remember to install the requirements.):
 ```bash
 cd CMEPDA_project_2024
+pip install -r requirements.txt 
 python main.py
+```
+Refer to help for the different section of the main orchestrator:
+```bash
+python main.py --help
+usage: main.py [-h] [-log] [-out OUTPUT_DIR] [-in INPUT_DIR] [-csv CSV_NAME] [-set] [-svm] [-xai] [-up] [-bg] [-cv C_VALUES [C_VALUES ...]] [-xc] [-of OUTER_FOLDS] [-inf INNER_FOLDS]
+
+Launch Machine Learning and XAI Pipelines.
+
+options:
+  -h, --help            show this help message and exit
+  -log, --enable-file-logging
+                        Enable writing .log files to disk for all executed modules (Default: False).
+  -out OUTPUT_DIR, --output-dir OUTPUT_DIR
+                        Target root directory for all outputs (Default: Python_Results).
+  -in INPUT_DIR, --input-dir INPUT_DIR
+                        Source directory containing NIfTI and CSV files (Default: AD_CTRL in project root).
+  -csv CSV_NAME, --csv-name CSV_NAME
+                        Name of the clinical covariate CSV file (Default: covariateADCTRLsexAgeTIV.csv).
+  -set, --run-setup     Execute common setup (generates CV folds & cohort registry).
+  -svm, --run-svm       Execute the Linear SVM classification pipeline.
+  -xai, --run-xai       Execute the XAI pipeline for the trained Linear SVM.
+  -up, --use-pretrained
+                        If passed, skips training and loads pre-trained models. Default: False (Forces full retraining).
+  -bg, --bypass-grid    If passed, skips GridSearch and uses historical Optimal_C from CSV. Default: False (Executes full GridSearch).
+  -cv C_VALUES [C_VALUES ...], --c-values C_VALUES [C_VALUES ...]
+                        List of values for the SVM 'C' hyperparameter. Example: -cv 0.0001 0.001 0.01 (Default: [1e-4]).
+  -xc, --run-compare    Execute the Comparative XAI benchmarking against MATLAB VBM Ground Truth.
+  -of OUTER_FOLDS, --outer-folds OUTER_FOLDS
+                        Number of outer cross-validation folds. Default: 5
+  -inf INNER_FOLDS, --inner-folds INNER_FOLDS
+                        Number of inner cross-validation folds. Default: 5
 ```
 
 For the preprocessing part you need **Matlab**, version 25.2, not included in the project's requirements. 

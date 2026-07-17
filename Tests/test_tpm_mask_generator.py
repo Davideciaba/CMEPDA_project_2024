@@ -1,3 +1,10 @@
+"""
+Module: test_tpm_mask_generator.py
+
+Unit testing suite targeting the TpmMaskGenerator class.
+Validates the extraction of NIfTI metadata, the verification of spatial alignment, 
+and the application of probability thresholds for boolean binarization.
+"""
 import unittest
 from unittest.mock import patch, MagicMock
 import numpy as np
@@ -12,15 +19,30 @@ from Python.utils.tpm_mask_generator import TpmMaskGenerator
 from Python.utils.py_logger import CustomLogger
 
 class TestTpmMaskGenerator(unittest.TestCase):
-    def setUp(self):
+    """
+    Test suite for Python.utils.tpm_mask_generator.TpmMaskGenerator.
+    
+    PURPOSE:
+        Secures the integrity of external file loading and ensures spatial 
+        geometry checks raise exceptions when matrices misalign.
+    """
+
+    def setUp(self) -> None:
+        """Initializes the mask generator with a Mock Logger."""
         self.logger = CustomLogger(name="TestTPM")
         self.gen = TpmMaskGenerator(logger=self.logger)
 
     @patch('Python.utils.tpm_mask_generator.nib.load')
     @patch('Python.utils.tpm_mask_generator.pd.read_csv')
     @patch('Python.utils.tpm_mask_generator.nib.save')
-    def test_generate_mask_flow(self, mock_save, mock_csv, mock_load):
-        """Validates the standard operating flow of the generator."""
+    def test_generate_mask_flow(self, mock_save, mock_csv, mock_load) -> None:
+        """
+        Validates the standard operating flow of the generator.
+        
+        PURPOSE:
+            Mocks physical NIfTI files to verify that if spatial dimensions are 
+            perfect, the flow saves the final binarized NIfTI properly.
+        """
         mock_csv.return_value = pd.DataFrame({'file_path': ['fake.nii']})
         
         mock_img = MagicMock()
@@ -37,8 +59,14 @@ class TestTpmMaskGenerator(unittest.TestCase):
 
     @patch('Python.utils.tpm_mask_generator.nib.load')
     @patch('Python.utils.tpm_mask_generator.pd.read_csv')
-    def test_spatial_validation_mismatch(self, mock_csv, mock_load):
-        """Asserts that a ValueError is raised if the TPM dimension does not match the cohort."""
+    def test_spatial_validation_mismatch(self, mock_csv, mock_load) -> None:
+        """
+        Asserts that a ValueError is raised if the TPM dimension does not match the cohort.
+        
+        PURPOSE:
+            Simulates MATLAB's strict dimensional control. An external map of 5x5x5 
+            must strictly fail if the reference is 10x10x10.
+        """
         mock_csv.return_value = pd.DataFrame({'file_path': ['fake.nii']})
         
         mock_ref = MagicMock()
@@ -46,7 +74,7 @@ class TestTpmMaskGenerator(unittest.TestCase):
         mock_ref.affine = np.eye(4)
         
         mock_tpm = MagicMock()
-        mock_tpm.shape = (5, 5, 5) # Dimensione errata di proposito
+        mock_tpm.shape = (5, 5, 5) # Intentionally wrong dimensions
         mock_tpm.affine = np.eye(4)
         mock_tpm.get_fdata.return_value = np.zeros((5, 5, 5))
         

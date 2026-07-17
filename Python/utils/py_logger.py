@@ -10,7 +10,6 @@ KEY FEATURES:
 - Colored Output: Native support via loguru.
 - File Rotation: Native rotation and compression for file sinks.
 - Contextual Data: Dynamically attach extra key-value context to all logs.
-        It can wrap logs from MATLAB and Python.
 """
 import sys
 import os
@@ -19,9 +18,19 @@ from loguru import logger
 import contextlib
 
 class CustomLogger:
-    def __init__(self, name: str = "root" ):
+    """
+    Advanced logging utility wrapping Loguru.
+    
+    PURPOSE:
+        Provides thread-safe, colored, and rotating log streams. Acts as a drop-in 
+        replacement for the legacy MATLAB Logger, supporting identical context injection.
+    """
+    def __init__(self, name: str = "root"):
         """
         Initializes a new CustomLogger instance without any active handlers.
+        
+        Args:
+            name (str): Identifier for the logger instance.
         """
         self.name = name
         self.extra_context: Dict[str, Any] = {}
@@ -44,9 +53,12 @@ class CustomLogger:
         # It is like formatContext in MATLAB Logger.m
         self._logger = logger.patch(self._patch_record)
 
-    def set_level(self, level_name: str):
+    def set_level(self, level_name: str) -> None:
         """
         Adjusts the global minimum severity threshold for all attached handlers.
+        
+        Args:
+            level_name (str): The desired severity level (e.g., 'INFO', 'DEBUG').
         """
         level_name = level_name.upper()
         if level_name in self.levels:
@@ -54,24 +66,33 @@ class CustomLogger:
         else:
             self.warning(f"Invalid log level: {level_name}. Level not changed.")
 
-    def add_console_handler(self, level: str = "DEBUG", use_colors: bool = False):
+    def add_console_handler(self, level: str = "DEBUG", use_colors: bool = False) -> None:
         """
         Attaches the standard console output as a log sink.
+        
+        Args:
+            level (str): Minimum severity level to print.
+            use_colors (bool): Toggle for ANSI color injection.
         """
         self.set_level(level)
         
         sink_id = logger.add(
             sys.stdout,
-            level="TRACE",
+            level="TRACE", # TRACE allows the custom _level_filter to manage exclusions
             colorize=use_colors,
             format=self._get_format if use_colors else self._get_plain_format,
             filter=self._level_filter
         )
         self._sinks_config['console'] = sink_id
 
-    def add_file_handler(self, filename: str, level: str = "DEBUG", rotation: Optional[Union[str, int, float]] = "20 KB"):
+    def add_file_handler(self, filename: str, level: str = "DEBUG", rotation: Optional[Union[str, int, float]] = "20 KB") -> None:
         """
         Attaches a file on disk as a log sink with optional rotation.
+        
+        Args:
+            filename (str): Target path for the log file.
+            level (str): Minimum severity level to write.
+            rotation (Union[str, int, float]): Threshold for archiving old logs.
         """
         self.set_level(level)
         
@@ -89,11 +110,11 @@ class CustomLogger:
         self._file_sinks.append(filename)
         self._sinks_config[f'file_{filename}'] = sink_id
 
-    def add_context(self, key: str, value: Any):
+    def add_context(self, key: str, value: Any) -> None:
         """Adds or updates a key-value pair in the context map."""
         self.extra_context[key] = value
 
-    def clear_context(self):
+    def clear_context(self) -> None:
         """Resets the entire context map."""
         self.extra_context.clear()
 
@@ -101,10 +122,14 @@ class CustomLogger:
     def context(self, **kwargs):
         """
         Context manager to temporarily attach extra fields to logs within a specific block.
-        It can be used to wrap MATLAB engine executions.
         
+        PURPOSE:
+            Allows temporary injection of metadata (e.g., Fold ID, Epoch) that is 
+            automatically cleared when the execution block exits.
+            
         Usage:
             with log.context(Source="MATLAB", Script="preprocessing.m"):
+                log.info("Running...")
         """
         # Save the current state of the context
         old_context = self.extra_context.copy()
@@ -117,13 +142,11 @@ class CustomLogger:
             # Restore the original context regardless of exceptions
             self.extra_context = old_context
 
-    # ---- Helper Methods ----
-
-    def _level_filter(self, record: Dict[str, Any]):
+    def _level_filter(self, record: Dict[str, Any]) -> bool:
         """Filters log entries against the configured global level."""
         return record["level"].no >= self.current_level
 
-    def _patch_record(self, record: Dict[str, Any]):
+    def _patch_record(self, record: Dict[str, Any]) -> None:
         """Builds the context string for the current log record."""
         if self.extra_context:
             parts = [f"{k} = {v}" for k, v in self.extra_context.items()]
@@ -131,24 +154,22 @@ class CustomLogger:
         else:
             record["extra"]["ctx_str"] = ""
 
-    def _get_format(self, record: Dict[str, Any]):
-        """Formatter with colored output."""
+    def _get_format(self, record: Dict[str, Any]) -> str:
+        """Formatter with colored ANSI output."""
         fmt = "<dim>{time:YYYY-MM-DD HH:mm:ss.SSS}</dim> | <level>{level: <8}</level> | <dim>{file.name}:{function}:{line}</dim> - <level>{message}</level>"
         if record["extra"].get("ctx_str"):
             fmt += " | <cyan>{extra[ctx_str]}</cyan>"
         fmt += "\n"
         return fmt 
     
-    def _get_plain_format(self, record: Dict[str, Any]):
-        """Formatter with plain output."""
+    def _get_plain_format(self, record: Dict[str, Any]) -> str:
+        """Formatter with plain text output for disk writing."""
         fmt = "{time:YYYY-MM-DD HH:mm:ss.SSS} | {level: <8} | {file.name}:{function}:{line} - {message}"
         if record["extra"].get("ctx_str"):
             fmt += " | {extra[ctx_str]}"
         fmt += "\n"
         return fmt
     
-    # ---------- Wrappers for each log level ----------
-
     def log(self, level_name: str, message: str, *args, **kwargs) -> None:
         """
         Processes the message and sends it to all configured sinks.
@@ -172,39 +193,41 @@ class CustomLogger:
         safe_message = message.replace("{", "{{").replace("}", "}}")
         self._logger.opt(depth=1).log(level_name, safe_message)
 
-    def trace(self, msg: str, *args, **kwargs):
+    def trace(self, msg: str, *args, **kwargs) -> None:
         """Log a TRACE level message with optional formatting."""
         self._logger.opt(depth=1).trace(msg, *args, **kwargs)
 
-    def debug(self, msg: str, *args, **kwargs):
+    def debug(self, msg: str, *args, **kwargs) -> None:
         """Log a DEBUG level message with optional formatting."""
         self._logger.opt(depth=1).debug(msg, *args, **kwargs)
 
-    def info(self, msg: str, *args, **kwargs):
-        """Log a INFO level message with optional formatting."""
+    def info(self, msg: str, *args, **kwargs) -> None:
+        """Log an INFO level message with optional formatting."""
         self._logger.opt(depth=1).info(msg, *args, **kwargs)
 
-    def success(self, msg: str, *args, **kwargs):
+    def success(self, msg: str, *args, **kwargs) -> None:
         """Log a SUCCESS level message with optional formatting."""
         self._logger.opt(depth=1).success(msg, *args, **kwargs)
 
-    def warning(self, msg: str, *args, **kwargs):
+    def warning(self, msg: str, *args, **kwargs) -> None:
         """Log a WARNING level message with optional formatting."""
         self._logger.opt(depth=1).warning(msg, *args, **kwargs)
 
-    def error(self, msg: str, *args, **kwargs):
-        """Log a ERROR level message with optional formatting."""
+    def error(self, msg: str, *args, **kwargs) -> None:
+        """Log an ERROR level message with optional formatting."""
         self._logger.opt(depth=1).error(msg, *args, **kwargs)
 
-    def critical(self, msg: str, *args, **kwargs):
+    def critical(self, msg: str, *args, **kwargs) -> None:
         """Log a CRITICAL level message with optional formatting."""
         self._logger.opt(depth=1).critical(msg, *args, **kwargs)
 
-    # --- Destructor and Garbage Collection ---
     def shutdown(self) -> None:
         """
-        Iterates through all sinks to ensure file handles are closed properly
-        and performs garbage collection on 0-byte files.
+        Safely dismounts file handlers.
+        
+        PURPOSE:
+            Iterates through all sinks to ensure file handles are closed properly
+            and performs garbage collection on 0-byte files (preventing disk clutter).
         """
         # Detach all loguru handlers
         logger.remove()
@@ -221,4 +244,5 @@ class CustomLogger:
         self._sinks_config.clear()
 
     def __del__(self) -> None:
+        """Destructor triggers automated shutdown and handler release."""
         self.shutdown()

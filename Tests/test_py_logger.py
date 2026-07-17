@@ -1,8 +1,9 @@
 """
 Module: test_py_logger.py
 
-This test suite ensures deterministic, I/O-free testing of logging behavior,
-context managers, garbage collection and sink isolation for the CustomLogger class.
+Unit testing suite targeting the CustomLogger class.
+Ensures deterministic, I/O-free testing of logging behavior, context managers, 
+garbage collection and sink isolation.
 """
 import unittest
 import sys
@@ -19,16 +20,25 @@ parent_dir= current_dir.parent
 # Add the parent directory to sys.path to allow imports from there
 sys.path.append(str(parent_dir))
 
-# Import the target module
 from Python.utils.py_logger import CustomLogger
 
 class TestCustomLogger(unittest.TestCase):
     """
-    Test suite for py_logger.CustomLogger.
+    Test suite for Python.utils.py_logger.CustomLogger.
     
+    PURPOSE:
+        Validates output streams via StringIO injection, verifies Loguru 
+        encapsulation, and guarantees 0-byte file cleanup upon shutdown.
     """
-    def test_initialization_and_context(self):
-        """Verify that basic object states and context mapping behave as expected."""
+
+    def test_initialization_and_context(self) -> None:
+        """
+        Verify that basic object states and context mapping behave as expected.
+        
+        PURPOSE:
+            Ensures that the logger accepts standard dictionary states without 
+            polluting global namespaces.
+        """
         log = CustomLogger(name="test_runner")
         
         self.assertEqual(log.name, "test_runner")
@@ -42,11 +52,16 @@ class TestCustomLogger(unittest.TestCase):
         log.clear_context()
         self.assertEqual(len(log.extra_context), 0)
 
-    # Mock sys.stdout to capture console output
-    # with a StringIO object for assertions
+    # Mock sys.stdout to capture console output with a StringIO object for assertions
     @patch("sys.stdout", new_callable=io.StringIO)
-    def test_console_handler_and_levels(self, mock_stdout: io.StringIO):
-        """Verify that global filters apply correctly to the console handler."""
+    def test_console_handler_and_levels(self, mock_stdout: io.StringIO) -> None:
+        """
+        Verify that global filters apply correctly to the console handler.
+        
+        PURPOSE:
+            Confirms that messages below the set logging threshold are correctly 
+            discarded before reaching the stdout stream.
+        """
         log = CustomLogger()
         log.add_console_handler(level="INFO", use_colors=False)
         
@@ -70,8 +85,10 @@ class TestCustomLogger(unittest.TestCase):
         self.assertIn("TRACE", output)
 
     @patch("sys.stdout", new_callable=io.StringIO)
-    def test_context_injection(self, mock_stdout: io.StringIO):
-        """Verify that the context is appended to logs."""
+    def test_context_injection(self, mock_stdout: io.StringIO) -> None:
+        """
+        Verify that the context is automatically appended to formatted logs.
+        """
         log = CustomLogger()
         log.add_console_handler(level="DEBUG")
         
@@ -85,10 +102,10 @@ class TestCustomLogger(unittest.TestCase):
         self.assertIn("Module = VBM | Status = Active", output)
 
     @patch("sys.stdout", new_callable=io.StringIO)
-    def test_context_manager(self, mock_stdout: io.StringIO):
+    def test_context_manager(self, mock_stdout: io.StringIO) -> None:
         """
         Verify that the context manager temporarily injects and properly 
-        cleans up metadata in a with block.
+        cleans up metadata within a generic 'with' block.
         """
         log = CustomLogger()
         log.add_console_handler(level="DEBUG")
@@ -118,10 +135,10 @@ class TestCustomLogger(unittest.TestCase):
 
     # Mock loguru.logger.add to prevent file creation and capture parameters
     @patch("loguru.logger.add")
-    def test_rotation_parameter_translation(self, mock_logger_add):
+    def test_rotation_parameter_translation(self, mock_logger_add) -> None:
         """
         Verify that numeric rotation parameters are mathematically translated to bytes, 
-        while semantic strings are preserved.
+        while semantic strings (like "20 MB") are preserved for Loguru.
         """
         log = CustomLogger()
         
@@ -136,10 +153,10 @@ class TestCustomLogger(unittest.TestCase):
         self.assertEqual(kwargs.get("rotation"), "10 MB")
 
     @patch("sys.stdout", new_callable=io.StringIO)
-    def test_log_method_and_formatting_error(self, mock_stdout: io.StringIO):
+    def test_log_method_and_formatting_error(self, mock_stdout: io.StringIO) -> None:
         """
-        Verify the log() method and its exception handling 
-        for intentionally malformed format strings.
+        Verify the log() method and its exception handling for intentionally 
+        malformed Python format strings (e.g., missing brace placeholders).
         """
         log = CustomLogger()
         log.add_console_handler(level="TRACE")
@@ -157,10 +174,10 @@ class TestCustomLogger(unittest.TestCase):
         self.assertIn("Failed to format log message! Reason", output)
         self.assertIn("Broken string {{missing}}", output)
 
-    def test_garbage_collection(self):
+    def test_garbage_collection(self) -> None:
         """
-        Verifies that 0-byte log files are automatically 
-        deleted from disk during the shutdown sequence.
+        Verifies that 0-byte log files are automatically deleted from disk 
+        during the shutdown sequence to prevent disk clutter.
         """
         with tempfile.TemporaryDirectory() as temp_dir:
             log_file = pathlib.Path(temp_dir) / "empty_garbage.log"
@@ -180,9 +197,10 @@ class TestCustomLogger(unittest.TestCase):
                 "The 0-byte abandoned log file was not destroyed."
             )
     
-    def test_file_logging_integration(self):
+    def test_file_logging_integration(self) -> None:
         """
-        Verifies successful writes to disk and that the log file contains the expected content.
+        Verifies successful physical writes to disk and that the log file 
+        contains the expected text content and contexts.
         """
         # Create an isolated temporary directory
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -208,7 +226,6 @@ class TestCustomLogger(unittest.TestCase):
 
             self.assertIn(test_message, content)
             self.assertIn("Deployment = TestEnv", content)   
-
 
 if __name__ == '__main__':
     unittest.main(verbosity=2)

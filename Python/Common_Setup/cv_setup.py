@@ -1,10 +1,12 @@
 """
+Module: cv_setup.py
+
 Pipeline Phase 0: Setup & Freeze Orchestrator.
 
-Responsibilities:
-1. Normalizes raw CSV data into a standardized Python Registry.
-2. Computes the Nested CV topology and freezes it into a JSON Artifact (SSOT).
-No MATLAB or model-specific logic exists here. Pure Universal Setup.
+PURPOSE:
+    1. Normalizes raw CSV data into a standardized Python Registry.
+    2. Computes the Nested CV topology and freezes it into a JSON Artifact (SSOT).
+    No MATLAB or model-specific logic exists here. Pure Universal Setup.
 """
 import sys
 from pathlib import Path
@@ -15,6 +17,7 @@ from Python.utils.py_logger import CustomLogger
 from Python.utils.cv_manager import CVManager
 from Python.utils.reset_directory import reset_directory
 
+
 def cv_setup(
     enable_file_logging: bool = False, 
     output_dir: Optional[Path] = None, 
@@ -23,8 +26,26 @@ def cv_setup(
     outer_folds: int = 5,
     inner_folds: int = 5
 ) -> None:
+    """
+    Orchestrates the environment setup and cross-validation serialization.
     
-    # Path Configurations
+    PURPOSE:
+        Guarantees exact parity between different Machine Learning algorithms by locking 
+        down the train/test indices upfront. Generates the 'Single Source of Truth' (SSOT).
+        
+    Args:
+        enable_file_logging (bool): Toggle for saving execution logs to disk.
+        output_dir (Optional[Path]): Override directory for script output. Defaults to current directory.
+        input_dir (Optional[Path]): Override directory containing raw NIfTI data.
+        csv_name (str): The specific filename of the original cohort registry.
+        outer_folds (int): How many distinct CV folds to generate for the macro-evaluation.
+        inner_folds (int): How many nested inner folds for hyperparameter tuning.
+        
+    Raises:
+        FileNotFoundError: If the source CSV or any listed NIfTI is physically missing.
+        OSError: If there are permission issues creating standard directories or logs.
+    """
+    
     current_dir = Path(__file__).parent.resolve()
     project_root_dir = current_dir.parent.parent
     source_dir = input_dir.resolve() if input_dir else project_root_dir / "AD_CTRL"
@@ -50,7 +71,6 @@ def cv_setup(
             log.critical(f"I/O ERROR: Cannot write to {log_path.name}. Details: {e}")
             sys.exit(1)
     else:
-        # Dummy write test for console-only mode
         common_setup_dir.mkdir(parents=True, exist_ok=True)
         dummy_file = common_setup_dir / ".dummy_write_test"
         try:
@@ -63,7 +83,6 @@ def cv_setup(
             sys.exit(1)
 
     log.info("--- Data and Cross-Validation Setup ---")
-
     log.info("Creating a cohort registry containing essential information...")
     
     try:
@@ -81,16 +100,15 @@ def cv_setup(
         file_path = nifti_dir / f"smwc1{subj_id}.nii"
         
         try:
+            # Physical File Validation. Crash immediately if a NIfTI is missing.
             with open(file_path, 'rb'): pass
         except FileNotFoundError as e:
             log.critical(f"Integrity Error: missing NIfTI volume for subject {subj_id} at {file_path}")
             raise e
         
         try:
-            # Calculate the path relative to the project root
             portable_path = file_path.relative_to(project_root_dir)
         except ValueError:
-            # Fallback if input_dir is strictly outside the project root
             log.warning(f"Subject {subj_id} NIfTI is outside the project root. Absolute path will be used.")
             portable_path = file_path
 
@@ -113,3 +131,6 @@ def cv_setup(
     
     CVManager.save_to_json(splits, subjects, str(folds_json_path))
     log.success(f"Cross-validation topology saved to '{folds_json_path.name}'. Ready for model execution.")
+
+if __name__ == "__main__":
+    cv_setup()

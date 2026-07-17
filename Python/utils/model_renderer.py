@@ -1,7 +1,7 @@
 """
-Model Renderer Module.
+Module: model_renderer.py
 
-This module houses the ModelRenderer class, analogous to MATLAB's BrainRenderer.
+Houses the ModelRenderer class, analogous to MATLAB's BrainRenderer.m.
 It isolates all plotting libraries (matplotlib, seaborn) from the core mathematical engines,
 providing robust, stateful methods for exporting publication-ready MLOps graphics.
 """
@@ -20,15 +20,20 @@ from Python.utils.py_logger import CustomLogger
 class ModelRenderer:
     """
     Handles Graphics Visualization and Exporting for Python Models.
-    Isolates rendering logic to adhere strictly to the Single Responsibility Principle.
+    
+    PURPOSE:
+        Isolates rendering logic to adhere strictly to the Single Responsibility Principle.
+        Acts as the central Engine for all visualizations (ROC, Learning Curves, 
+        3D Brain Overlays, and XAI Analytics).
     """
 
     def __init__(self, logger: CustomLogger, output_dir: str):
         """
         Initializes the ModelRenderer object.
+        
         Args:
-            logger: CustomLogger instance for execution tracking.
-            output_dir: Base directory path to save the rendered plots.
+            logger (CustomLogger): CustomLogger instance for execution tracking.
+            output_dir (str): Base directory path to save the rendered plots.
         """
         self.logger = logger
         self.output_dir = pathlib.Path(output_dir).resolve()
@@ -38,14 +43,16 @@ class ModelRenderer:
 
     def plot_roc_curves(self, fold_artifacts: List[Dict[str, Any]], model_name: str, filename: str) -> None:
         """
-        Plots the Receiver Operating Characteristic (ROC) curve for each fold,
-        along with the Mean ROC curve and its ±1 Standard Deviation variance band.
-        All AUC scores are formatted as percentages (0-100%).
+        Plots the Receiver Operating Characteristic (ROC) curve for each fold.
         
+        PURPOSE:
+            Aggregates cross-validation performance. Plots the Mean ROC curve and its 
+            ±1 Standard Deviation variance band. AUC scores are formatted as percentages.
+            
         Args:
-            fold_artifacts: The artifacts list returned by execute_nested_cv.
-            model_name: String label for the plot (e.g., "Linear SVM").
-            filename: Output filename (e.g., "SVM_ROC_Curve.png").
+            fold_artifacts (List[Dict]): The artifacts list returned by execute_nested_cv.
+            model_name (str): String label for the plot (e.g., "Linear SVM").
+            filename (str): Output filename (e.g., "SVM_ROC_Curve.png").
         """
         self.logger.info(f"Rendering Nested CV ROC Curves for {model_name}...")
         
@@ -115,7 +122,15 @@ class ModelRenderer:
     def plot_inner_cv_losses(self, fold_artifacts: List[Dict[str, Any]], model_name: str, filename: str) -> None:
         """
         Plots Train and Validation Loss vs Epoch for the Inner Folds.
-        Groups inner folds belonging to the same Outer Fold into a single subplot.
+        
+        PURPOSE:
+            Visualizes the hyperparameter tuning phase. Groups inner folds belonging 
+            to the same Outer Fold into a single subplot for comparative evaluation.
+            
+        Args:
+            fold_artifacts (List[Dict]): The artifacts list.
+            model_name (str): Label for the plot title.
+            filename (str): Name of the exported file.
         """
         self.logger.info(f"Rendering Inner CV Learning Curves for {model_name}...")
         
@@ -173,7 +188,16 @@ class ModelRenderer:
 
     def plot_outer_cv_losses(self, fold_artifacts: List[Dict[str, Any]], model_name: str, filename: str) -> None:
         """
-        Plots Train and Test Loss vs Epoch for every Outer Fold on a single overarching plot.
+        Plots Train and Test Loss vs Epoch for every Outer Fold.
+        
+        PURPOSE:
+            Generates a single overarching plot displaying the final retraining phase 
+            for all outer folds to diagnose generalization and overfitting.
+            
+        Args:
+            fold_artifacts (List[Dict]): The artifacts list.
+            model_name (str): Label for the plot title.
+            filename (str): Name of the exported file.
         """
         self.logger.info(f"Rendering Outer CV Learning Curves for {model_name}...")
         
@@ -212,8 +236,21 @@ class ModelRenderer:
 
     def _get_voxel_indices_from_mni(self, affine_mat: np.ndarray, slice_config: Any, tensor_size: Tuple[int, int, int], active_mask: np.ndarray) -> Tuple[List[int], List[float]]:
         """
-        Translates a configuration (scalar, [start, step, stop], or explicit list)
-        into valid physical Z-axis array coordinates. Matches BrainRenderer.m exactly.
+        Translates a configuration into valid physical Z-axis array coordinates.
+        
+        PURPOSE:
+            Matches MATLAB's `BrainRenderer.getVoxelIndicesFromMni` exactly.
+            Solves the linear equation system derived from the NIfTI affine matrix 
+            to map real-world millimeters into Python array slicing indices.
+            
+        Args:
+            affine_mat (np.ndarray): 4x4 spatial affine transformation matrix.
+            slice_config (Any): Scalar (step), [start, step, stop], or explicit MNI list.
+            tensor_size (Tuple): Dimensions of the 3D volume.
+            active_mask (np.ndarray): Boolean mask of active voxels.
+            
+        Returns:
+            Tuple[List[int], List[float]]: Array indices for Z-axis, and their true MNI values.
         """
         # Extract Affine parameters strictly for Z-axis (Index 2 in Python)
         vox_center_xy = [round(tensor_size[0] / 2), round(tensor_size[1] / 2)]
@@ -316,8 +353,24 @@ class ModelRenderer:
                                map_title: str, export_filename: str, threshold: float = 1e-15,
                                slice_config: Any = [-33.0, 3.0, 6.0]) -> None:
         """
-        Python replication of MATLAB's BrainRenderer.plotStatisticalOverlay.
-        Extracts 2D Axial slices surgically and overlays hot colormaps natively.
+        Extracts and plots 2D Axial slices from 3D NIfTI volumes.
+        
+        PURPOSE:
+            Replicates MATLAB's `BrainRenderer.plotStatisticalOverlay` in native Python.
+            Overlays 'hot' colormap statistical maps on top of grayscale anatomical 
+            backgrounds, injecting transparency dynamically based on significance.
+            
+        Args:
+            bg_nifti_path (str): Path to anatomical background volume (e.g. CTRL Subject).
+            stats_nifti_path (str): Path to the XAI statistical map.
+            mask_nifti_path (str): Path to the Boolean Brain Mask.
+            map_title (str): Title for the generated figure.
+            export_filename (str): Name of the file to save in the output_dir.
+            threshold (float): Minimum absolute threshold for a voxel to be rendered.
+            slice_config (Any): MNI slicing strategy configuration.
+            
+        Raises:
+            IOError: If any NIfTI file fails to load.
         """
         try:
             bg_img = nib.load(bg_nifti_path)
@@ -411,7 +464,17 @@ class ModelRenderer:
 
     def plot_top_rois(self, df: pd.DataFrame, score_col: str, title: str, filename: str, top_k: int = 20) -> None:
         """
-        Crea e salva un grafico a barre orizzontali delle Top K regioni.
+        Creates a horizontal bar chart displaying the Top K most impactful regions.
+        
+        PURPOSE:
+            Visualizes Feature Importance magnitude in a ranked format based on absolute values.
+            
+        Args:
+            df (pd.DataFrame): Dataframe containing ROI metrics.
+            score_col (str): Column to sort and plot (e.g., 'Abs_Mean_ROI_Signal').
+            title (str): Plot title.
+            filename (str): Name of the exported file.
+            top_k (int): Number of top regions to display.
         """
         self.logger.info(f"Building {top_k} bar plot for {title}...")
         
@@ -441,7 +504,18 @@ class ModelRenderer:
 
     def plot_diverging_bars(self, df: pd.DataFrame, score_col: str, title: str, filename: str, top_k: int = 20) -> None:
         """
-        Crea un grafico a barre divergenti per mostrare l'impatto direzionale.
+        Creates a diverging bar chart representing the directional impact of features.
+        
+        PURPOSE:
+            Highlights not just magnitude, but whether a region pushes the model 
+            prediction towards AD (negative sign = Blue) or CTRL (positive sign = Red).
+            
+        Args:
+            df (pd.DataFrame): Dataframe containing ROI metrics.
+            score_col (str): Column containing RAW values with signs.
+            title (str): Plot title.
+            filename (str): Name of the exported file.
+            top_k (int): Number of top regions to display based on absolute magnitude.
         """
         self.logger.info(f"Building Diverging Bar Chart for {title}...")
         
@@ -475,14 +549,24 @@ class ModelRenderer:
 
     def plot_heatmap(self, df_matrix: pd.DataFrame, filename: str, title_suffix: str = "") -> None:
         """
-        Genera una heatmap stile Bloch per confrontare la Feature Importance su tutti i fold.
+        Generates a comparative Heatmap evaluating Feature Importance across models.
+        
+        PURPOSE:
+            Replicates the visual analytic standard proposed by Bloch et al.
+            Provides a global view to identify which anatomical features are 
+            consistently deemed important across different XAI algorithms.
+            
+        Args:
+            df_matrix (pd.DataFrame): 2D Matrix of Normalized Feature Importances.
+            filename (str): Name of the exported file.
+            title_suffix (str): Contextual addition to the title.
         """
         self.logger.info(f"Building Heatmap - {title_suffix}...")
         
         fig, ax = plt.subplots(figsize=(16, 14), dpi=150)
         
         sns.heatmap(df_matrix, cmap='Blues', annot=False, 
-                    cbar_kws={'label': 'Normalized Feature Importance (|Mean ROI|)'},
+                     cbar_kws={'label': 'Normalized Feature Importance (|Mean ROI|)'},
                     linewidths=.5, linecolor='lightgray', ax=ax)
         
         ax.set_title(f'Global Feature Importances across Models ({title_suffix})', fontsize=16, pad=20)
@@ -506,7 +590,16 @@ class ModelRenderer:
 
     def plot_ndcg_matrix(self, ndcg_matrix: pd.DataFrame, filename: str, title_suffix: str = "") -> None:
         """
-        Genera una matrice di correlazione nDCG all-to-all tra i metodi basata sulla Feature Importance.
+        Generates an All-to-All correlation matrix of nDCG scores between methods.
+        
+        PURPOSE:
+            Quantifies ranking agreement. Demonstrates statistically if XAI methods 
+            converge on the same biological conclusions as Ground Truth (VBM).
+            
+        Args:
+            ndcg_matrix (pd.DataFrame): nDCG correlation scores dataframe.
+            filename (str): Name of the exported file.
+            title_suffix (str): Contextual addition to the title.
         """
         self.logger.info(f"Building nDCG Matrix - {title_suffix}...")
         

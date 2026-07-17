@@ -1,10 +1,11 @@
 """
+Module: run_svm_classification.py
+
 SVM Pipeline Orchestrator.
 
 Acts as the absolute entry point for the Linear SVM MLOps architecture.
-Coordinates the execution of MATLAB Preprocessing via the MatlabOrchestrator,
-loads the serialized data via nibabel, injects structural synchronization 
-via the CVManager, and triggers the SVM Double Cross-Validation.
+Coordinates the execution of preprocessing, loads the serialized data via nibabel, 
+injects structural synchronization via the CVManager, and triggers the SVM Double Cross-Validation.
 """
 import sys
 from pathlib import Path
@@ -33,7 +34,28 @@ def run_svm_classification(
     outer_folds: int = 5,
     inner_folds: int = 5
 ) -> None:
-    """Orchestrator of the Linear SVM for classification"""
+    """
+    Orchestrator of the Linear SVM for classification.
+    
+    PURPOSE:
+        Connects the analytical logic (SVMClassifier) to the disk operations (loading/saving).
+        Ensures strict matching of security signatures defined by cv_setup.
+        
+    Args:
+        enable_file_logging (bool): If True, writes logs to disk.
+        output_dir (Optional[Path]): Directory where results will be written.
+        input_dir (Optional[Path]): Path to inputs.
+        csv_name (str): Expected registry filename.
+        bypass_grid (bool): If True, skips search and tries to load previous C params.
+        use_pretrained (bool): If True, aborts training and skips to rendering if models exist.
+        c_values (List[float]): Grid space for hyperparameter tuning.
+        outer_folds (int): Folds for robust model evaluation.
+        inner_folds (int): Folds for grid search tuning.
+        
+    Raises:
+        SystemExit: For fatal errors in IO or security signature mismatches.
+    """
+    
     current_dir = Path(__file__).parent.resolve()
     
     base_out = output_dir.resolve() if output_dir else current_dir
@@ -51,11 +73,9 @@ def run_svm_classification(
     log.add_console_handler(level="DEBUG", use_colors=True)
 
     if enable_file_logging:
-        # Make the file logging directory
         reset_directory(log_dir, log)
         log_path = log_dir / "SVMPipeline.log"
         
-        # Initialize file logger
         try:
             log.add_file_handler(str(log_path), level="DEBUG")
             log.success(f"File logging initialized safely at: {log_path.name}")
@@ -64,12 +84,10 @@ def run_svm_classification(
             log.critical("Pipeline aborted. Ensure you have write permissions.")
             sys.exit(1)
     else:
-        # Dummy write test for console-only mode
         svm_base.mkdir(parents=True, exist_ok=True)
         dummy_file = svm_base / ".dummy_write_test"
         try:
-            with open(dummy_file, 'w') as f:
-                pass
+            with open(dummy_file, 'w') as f: pass
             dummy_file.unlink()
             log.info("Dummy write test passed. Filesystem allows writing. Operating in console-only mode.")
         except OSError as e:
@@ -78,7 +96,6 @@ def run_svm_classification(
             sys.exit(1)
 
     log.info("--- Booting Linear SVM classification ---")
-
     log.info("Phase 0: Resolving execution state and historical artifacts...")
     active_c_grid = {'C': c_values}
 
@@ -87,7 +104,6 @@ def run_svm_classification(
             try:
                 old_metrics = pd.read_csv(csv_out_path)
                 if 'Optimal_C' in old_metrics.columns:
-                    # Extract unique optimal parameters from previous cross-validation
                     loaded_c_list = old_metrics['Optimal_C'].unique().tolist()
                     active_c_grid = {'C': loaded_c_list}
                     log.info(f"GridSearch bypass activated. Loaded historical optimal C values: {loaded_c_list}")
@@ -115,16 +131,14 @@ def run_svm_classification(
     if use_pretrained and models_exist:
         log.success("Pre-trained models found.")
         log.success("Bypassing SVM training and preserving existing artifacts.")
-        return # Early exit. No training performed.
+        return # Early exit
     elif use_pretrained and not models_exist:
         log.warning("Existing models and plots will be purged and recreated.")
         reset_directory(results_dir, log)
         reset_directory(plots_dir, log)
     else:
-        # Directories might not exist
         reset_directory(results_dir, log)
         reset_directory(plots_dir, log)
-
 
     if not registry_csv_path.exists() or not folds_json_path.exists():
         log.warning("Common setup missing. Automatically triggering Setup (cv_setup)...")
@@ -172,13 +186,11 @@ def run_svm_classification(
     else:
          log.success("Valid cached TPM Mask found. Bypassing mask generation.")
     
-  
     log.info("Phase 2: Loading cohort registry and TPM mask...")
     svm_engine = SVMClassifier(logger=log, param_grid=active_c_grid, inner_folds=inner_folds)
     
     subjects, X_full, y_full = svm_engine.load_data(str(registry_csv_path), str(mask_path))
     log.success(f"Data Loaded: {X_full.shape[0]} subjects ready.")
-
 
     log.info("Phase 3: Loading Cross-Validation split registry...")
     cv_splits = CVManager.load_from_json(str(folds_json_path))
@@ -191,7 +203,6 @@ def run_svm_classification(
         if expected_subjects != actual_subjects:
             log.critical("FATAL: Memory misalignment detected! The loaded CSV does not match the JSON artifact.")
             sys.exit(1)
-
 
     log.info("Phase 4: Executing SVM Double Cross Validation...")
     results_df, artifacts = svm_engine.execute_nested_cv(X_full, y_full, subjects, cv_splits)
@@ -229,3 +240,6 @@ def run_svm_classification(
         log.debug(f"Saved SVM Pipeline: {model_out_path.name}")
 
     log.success("--- SVM EXECUTION COMPLETE ---")
+
+if __name__ == "__main__":
+    run_svm_classification()

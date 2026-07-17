@@ -1,10 +1,13 @@
 """
+Module: tpm_mask_generator.py
+
 TPM Mask Generator Module.
 
-This module acts as the native Python replacement for the MATLAB-based 
-BrainMask generation pipeline. It guarantees spatial alignment between a 
-reference cohort and an external SPM Tissue Probability Map (TPM), 
-extracts the Gray Matter volume, and binarizes it safely.
+PURPOSE:
+    This module acts as the native Python replacement for the MATLAB-based 
+    BrainMask generation pipeline. It guarantees spatial alignment between a 
+    reference cohort and an external SPM Tissue Probability Map (TPM), 
+    extracts the Gray Matter volume, and binarizes it safely.
 """
 import pathlib
 import pandas as pd
@@ -19,11 +22,13 @@ DEFAULT_THRESHOLD = 0.01
 AFFINE_TOLERANCE = 1e-4
 GRAY_MATTER_INDEX = 0
 
-
 class TpmMaskGenerator:
     """
     Handles the spatial validation and computation of the TPM boolean mask.
-    Replicates the security and numerical stability of the legacy MATLAB pipeline.
+    
+    PURPOSE:
+        Replicates the security and numerical stability of the legacy MATLAB pipeline
+        entirely within Python/NiBabel.
     """
 
     def __init__(self, logger: CustomLogger):
@@ -31,7 +36,7 @@ class TpmMaskGenerator:
         Initializes the mask generator.
         
         Args:
-            logger: CustomLogger instance for execution tracking.
+            logger (CustomLogger): CustomLogger instance for execution tracking.
         """
         self.logger = logger
 
@@ -39,15 +44,19 @@ class TpmMaskGenerator:
         """
         Main orchestration method to compute and save the TPM Mask.
         
+        PURPOSE:
+            Loads the cohort space, verifies alignment with the SPM map, binarizes 
+            the Gray Matter layer, and safely exports the NIfTI artifact to disk.
+            
         Args:
-            registry_csv_path: Absolute path to the normalized cohort CSV.
-            tpm_nifti_path: Absolute path to the external SPM TPM.nii file.
-            output_mask_path: Absolute path where the binary mask will be exported.
-            threshold: Probability threshold for Grey Matter binarization.
+            registry_csv_path (str): Absolute path to the normalized cohort CSV.
+            tpm_nifti_path (str): Absolute path to the external SPM TPM.nii file.
+            output_mask_path (str): Absolute path where the binary mask will be exported.
+            threshold (float): Probability threshold for Grey Matter binarization.
             
         Raises:
-            FileNotFoundError: If I/O resources are missing.
-            ValueError: If spatial matrices or shapes are incompatible.
+            FileNotFoundError: If I/O resources (NIfTI or CSV) are missing.
+            ValueError: If spatial matrices or bounding box shapes are incompatible.
         """
         self.logger.info("--- Starting TPM Preprocessing ---")
         
@@ -81,8 +90,15 @@ class TpmMaskGenerator:
         """
         Extracts physical dimensions and the affine matrix from the cohort's first volume.
         
+        Args:
+            csv_path (str): Path to the cohort registry.
+            
         Returns:
-            Tuple containing the image shape, the 4x4 affine matrix, and the NIfTI header.
+            Tuple[Tuple[int, ...], np.ndarray, Any]: 
+                Contains the image shape, the 4x4 affine matrix, and the NIfTI header.
+                
+        Raises:
+            ValueError: If the CSV is completely empty.
         """
         try:
             df = pd.read_csv(csv_path)
@@ -108,6 +124,12 @@ class TpmMaskGenerator:
     def _process_tpm_volume(self, tpm_path: str) -> Tuple[np.ndarray, np.ndarray]:
         """
         Loads the SPM Tissue Probability Map and extracts the Gray Matter volume.
+        
+        Args:
+            tpm_path (str): Path to the SPM TPM.nii file.
+            
+        Returns:
+            Tuple[np.ndarray, np.ndarray]: The extracted 3D Gray Matter tensor and its affine matrix.
         """
         self.logger.info(f"Attempting to load SPM Tissue Probability Map (TPM) from: {tpm_path}")
         
@@ -137,6 +159,17 @@ class TpmMaskGenerator:
         """
         Guarantees the external map mathematically matches the cohort's spatial space.
         
+        PURPOSE:
+            Fails fast if the Affine transform deviates beyond a micro-tolerance 
+            (AFFINE_TOLERANCE = 1e-4), blocking the creation of fundamentally 
+            misaligned masks.
+            
+        Args:
+            ref_shape (Tuple): Dimensionality of the reference cohort.
+            ref_affine (np.ndarray): 4x4 coordinate mapping of the reference cohort.
+            tpm_shape (Tuple): Dimensionality of the TPM.
+            tpm_affine (np.ndarray): 4x4 coordinate mapping of the TPM.
+            
         Raises:
             ValueError: If dimensionality or affine transformations misalign.
         """

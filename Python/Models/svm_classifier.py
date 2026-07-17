@@ -1,11 +1,14 @@
 """
+Module: svm_classifier.py
+
 Predictive Linear SVM Engine Module.
 
-This module houses the fully encapsulated Support Vector Machine pipeline.
-It incorporates decoupled atomic methods for training (GridSearch tuning) 
-and pure inference, ensuring API uniformity with the Deep Learning ecosystem.
+PURPOSE:
+    This module houses the fully encapsulated Support Vector Machine pipeline.
+    It incorporates decoupled atomic methods for training (GridSearch tuning) 
+    and pure inference, ensuring API uniformity with the Deep Learning ecosystem.
 
-Designed as a pure library module without global execution blocks or manual path injections.
+    Designed as a pure library module without global execution blocks or manual path injections.
 """
 import numpy as np
 import pandas as pd
@@ -30,16 +33,19 @@ from Python.utils.py_logger import CustomLogger
 class SVMClassifier:
     """
     Monolithic Orchestration Engine for Double Cross-Validation using a Linear SVM.
-    Encapsulates all mathematical processing operations and decoupled inference APIs.
+    
+    PURPOSE:
+        Encapsulates all mathematical processing operations and decoupled inference APIs.
     """
 
     def __init__(self, logger: CustomLogger, param_grid: Dict[str, List[Any]], inner_folds: int = 5):
         """
         Initializes the SVM Engine.
+        
         Args:
-            logger: Centralized logging instance.
-            param_grid: The hyperparameter search space (e.g., {'C': [0.001, 0.01]}).
-            inner_folds: The number of inner folds used for internal hyperparameter tuning.
+            logger (CustomLogger): Centralized logging instance.
+            param_grid (Dict[str, List[Any]]): The hyperparameter search space (e.g., {'C': [0.001, 0.01]}).
+            inner_folds (int): The number of inner folds used for internal hyperparameter tuning.
         """
         self.logger = logger
         self.param_grid = param_grid
@@ -47,12 +53,25 @@ class SVMClassifier:
 
     @staticmethod
     def load_data(csv_path: str, mask_path: str) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
-        """Loads NIfTI volumes, extracts valid voxels via mask, and flattens to 1D."""
+        """
+        Loads NIfTI volumes, extracts valid voxels via mask, and flattens to 1D.
+        
+        PURPOSE:
+            Pre-loading the mask as a boolean matrix enables vectorized NumPy 
+            indexing, eliminating slow triple nested loops (X, Y, Z).
+            
+        Args:
+            csv_path (str): Absolute path to the normalized cohort CSV.
+            mask_path (str): Absolute path to the binarized TPM Boolean Mask.
+            
+        Returns:
+            Tuple[np.ndarray, np.ndarray, np.ndarray]: 
+                - subjects: Array of subject IDs.
+                - X_list: Flattened 2D feature matrix (Samples x Voxels).
+                - y_list: Target binary labels array.
+        """
         
         df = pd.read_csv(csv_path)
-        
-        # WHY: Pre-loading the mask as a boolean matrix enables vectorized NumPy 
-        # indexing, eliminating slow triple nested loops (X, Y, Z).
         mask_bool = nib.load(mask_path).get_fdata() > 0
         
         subjects, X_list, y_list = [], [], []
@@ -61,13 +80,23 @@ class SVMClassifier:
             y_list.append(int(row['label']))
             img_data = nib.load(row['file_path']).get_fdata(dtype=np.float32)
             
-            # WHY: Boolean Indexing directly extracts the valid values into a 1D vector.
+            # Boolean Indexing directly extracts the valid values into a 1D vector
             X_list.append(img_data[mask_bool])
             
         return np.array(subjects), np.array(X_list, dtype=np.float32), np.array(y_list)
 
     def _evaluate_classification(self, y_true: np.ndarray, y_pred: np.ndarray, y_decision: np.ndarray) -> Dict[str, float]:
-        """Computes clinical metrics safely, guarding against mathematical edge-cases."""
+        """
+        Computes clinical metrics safely, guarding against mathematical edge-cases.
+        
+        Args:
+            y_true (np.ndarray): True class labels.
+            y_pred (np.ndarray): Predicted discrete class labels.
+            y_decision (np.ndarray): Continuous decision scores from the SVM.
+            
+        Returns:
+            Dict[str, float]: Dictionary mapping metric names to computed values.
+        """
         tn, fp, fn, tp = confusion_matrix(y_true, y_pred, labels=[0, 1]).ravel()
         sensitivity = tp / (tp + fn) if (tp + fn) > 0 else 0.0
         specificity = tn / (tn + fp) if (tn + fp) > 0 else 0.0
@@ -89,13 +118,23 @@ class SVMClassifier:
     def train(self, X_train: np.ndarray, y_train: np.ndarray, inner_cv_iterator: List[Tuple[np.ndarray, np.ndarray]]) -> Tuple[float, float, float, Any]:
         """
         Unified Training API.
-        Executes the Inner Loop tuning to find the optimal 'C' regularization coefficient 
-        and fits the final estimator on the full training fold.
+        
+        PURPOSE:
+            Executes the Inner Loop tuning to find the optimal 'C' regularization coefficient 
+            and fits the final estimator on the full training fold. Protects against Data 
+            Leakage by binding StandardScaler inside a Pipeline.
+            
+        Args:
+            X_train (np.ndarray): Flattened training feature matrix.
+            y_train (np.ndarray): Training labels.
+            inner_cv_iterator (List): Pre-computed nested validation topology relative indices.
+            
         Returns:
-            - best_c: The optimal hyperparameter
-            - mean_cv_bal_acc: Mean balanced accuracy across the Inner Folds for best_c
-            - std_cv_bal_acc: Standard deviation of balanced accuracy for best_c
-            - best_pipeline: The fitted pipeline object
+            Tuple[float, float, float, Any]:
+                - best_c: The optimal hyperparameter chosen.
+                - mean_cv_bal_acc: Mean balanced accuracy across the Inner Folds.
+                - std_cv_bal_acc: Standard deviation of balanced accuracy.
+                - best_pipeline: The fitted sklearn Pipeline object.
         """
         base_pipeline = Pipeline([
             ('scaler', StandardScaler()),
@@ -126,15 +165,41 @@ class SVMClassifier:
     def predict(self, model: SVC, X_test: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
         """
         Pure Inference API (Deploy & XAI Ready).
-        Accepts a trained model and a feature matrix, returning discrete predictions 
-        and continuous probabilities safely.
+        
+        PURPOSE:
+            Accepts a trained pipeline/model and a feature matrix, returning discrete 
+            predictions and continuous probabilities safely.
+            
+        Args:
+            model (SVC): The trained sklearn pipeline.
+            X_test (np.ndarray): The hold-out feature matrix to evaluate.
+            
+        Returns:
+            Tuple[np.ndarray, np.ndarray]: Discrete predictions and decision scores.
         """
         y_pred = model.predict(X_test)
         y_decision = model.decision_function(X_test)
         return y_pred, y_decision
 
     def execute_nested_cv(self, X: np.ndarray, y: np.ndarray, subjects: np.ndarray, cv_splits: List[Dict[str, Any]]) -> Tuple[pd.DataFrame, List[Dict[str, Any]]]:
-        """Orchestrates the macro Double Cross-Validation pipeline."""
+        """
+        Orchestrates the macro Double Cross-Validation pipeline.
+        
+        PURPOSE:
+            Iterates through the frozen CV topology, calling training/tuning on the 
+            inner folds and rigorous hold-out evaluation on the outer folds.
+            
+        Args:
+            X (np.ndarray): The complete flattened cohort tensor.
+            y (np.ndarray): Complete binary label array.
+            subjects (np.ndarray): Subject IDs corresponding to rows in X.
+            cv_splits (List[Dict]): The frozen evaluation topology computed by CVManager.
+            
+        Returns:
+            Tuple[pd.DataFrame, List[Dict]]:
+                - fold_metrics_list: DataFrame capturing all clinical metrics per fold.
+                - fold_artifacts: List of dictionaries packing models and telemetry for XAI/rendering.
+        """
 
         self.logger.info(f"Starting SVM Nested CV: {len(cv_splits)} Outer Folds, {self.inner_folds} Inner Folds.")
         
