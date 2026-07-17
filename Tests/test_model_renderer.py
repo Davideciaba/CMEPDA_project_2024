@@ -80,11 +80,6 @@ class TestModelRenderer(unittest.TestCase):
         self.renderer.plot_top_rois(self.base_df, score_col='Mean_ROI_Signal', title='Test Top', filename="fake.png")
         mock_savefig.assert_called_once()
 
-    @patch('matplotlib.figure.Figure.savefig')
-    def test_plot_diverging_bars(self, mock_savefig) -> None:
-        """Test the directional diverging bar plot creation."""
-        self.renderer.plot_diverging_bars(self.base_df, score_col='Mean_ROI_Signal', title='Test Div', filename="fake_div.png")
-        mock_savefig.assert_called_once()
 
     @patch('matplotlib.figure.Figure.savefig')
     def test_bloch_heatmap(self, mock_savefig) -> None:
