@@ -6,17 +6,14 @@ Employs path injection to access the XAI and utils directories.
 Validates the dense linear algebra associated with the Haufe Transform and Gaonkar Maps.
 """
 import sys
-import os
+import pathlib
 
-# --- PATH INJECTION ---
-current_dir = os.path.dirname(os.path.abspath(__file__))
-parent_dir = os.path.abspath(os.path.join(current_dir, '..'))
-python_src_dir = os.path.join(parent_dir, 'Python')
+# Dynamically resolve paths using pathlib
+current_dir= pathlib.Path(__file__).resolve().parent
+parent_dir= current_dir.parent
 
-if os.path.exists(python_src_dir) and python_src_dir not in sys.path:
-    sys.path.insert(0, python_src_dir)
-elif parent_dir not in sys.path:
-    sys.path.insert(0, parent_dir)
+# Add the parent directory to sys.path to allow imports from there
+sys.path.append(str(parent_dir))
 
 import unittest
 from unittest.mock import patch
@@ -78,7 +75,6 @@ class TestSVMAnalyticalXAI(unittest.TestCase):
             z_map, p_map_raw = self.xai_engine.compute_gaonkar_maps(
                 X_train, y_train, svm_weights, 
                 C_param=SVM_C_PARAM, 
-                n_support=SUPPORT_VECTORS
             )
             self.assertEqual(z_map.shape[0], N_FEATURES)
 

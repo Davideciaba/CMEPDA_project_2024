@@ -10,10 +10,13 @@ import numpy as np
 import sys
 import os
 import tempfile
-import json
+import pathlib
+# Dynamically resolve paths using pathlib
+current_dir= pathlib.Path(__file__).resolve().parent
+parent_dir= current_dir.parent
 
-# Dynamically resolve path to the project root
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+# Add the parent directory to sys.path to allow imports from there
+sys.path.append(str(parent_dir))
 
 from Python.utils.cv_manager import CVManager
 

@@ -10,15 +10,13 @@ from unittest.mock import patch, MagicMock
 import numpy as np
 import pandas as pd
 import sys
-import os
+import pathlib
+# Dynamically resolve paths using pathlib
+current_dir= pathlib.Path(__file__).resolve().parent
+parent_dir= current_dir.parent
 
-# Construct the absolute path to the "Python" directory
-current_dir = os.path.dirname(os.path.abspath(__file__))
-project_root = os.path.dirname(current_dir)
-python_dir = os.path.join(project_root, 'Python')
-
-if python_dir not in sys.path:
-    sys.path.insert(0, python_dir)
+# Add the parent directory to sys.path to allow imports from there
+sys.path.append(str(parent_dir))
 
 from Python.utils.roi_analyzer import ROIAnalyzer
 from Python.utils.py_logger import CustomLogger
@@ -37,9 +35,9 @@ class TestROIAnalyzer(unittest.TestCase):
         self.logger = CustomLogger(name="TestROI")
         self.analyzer = ROIAnalyzer(logger=self.logger)
 
-    @patch('Python.XAI.roi_analyzer.os.path.exists')
-    @patch('Python.XAI.roi_analyzer.nib.load')
-    @patch('Python.XAI.roi_analyzer.pd.read_csv')
+    @patch('Python.utils.roi_analyzer.os.path.exists')
+    @patch('Python.utils.roi_analyzer.nib.load')
+    @patch('Python.utils.roi_analyzer.pd.read_csv')
     def test_extract_regional_importance_with_filtering(self, mock_read_csv, mock_nib_load, mock_exists) -> None:
         """
         Tests the ROI extraction and the strict filtering of White Matter/Ventricles.
@@ -109,29 +107,12 @@ class TestROIAnalyzer(unittest.TestCase):
         # Predicted values (model predictions for those same elements)
         predicted_scores = np.array([2, 1, 3, 0, 0, 1]) 
         
-        # Manual calculation for k=3:
-        # 1. Ideal order (based on true_scores): [3, 3, 2, 2, 1, 0]
-        #    Top 3 ideal: [3, 3, 2]
-        #    IDCG@3 = 3/log2(2) + 3/log2(3) + 2/log2(4) = 3 + 1.892 + 1 = 5.892
-        #
-        # 2. Predicted order (indices sorted by predicted_scores): [2, 0, 1, 5, 4, 3]
-        #    Corresponding *true* values ordered by prediction: [3, 3, 2, 2, 1, 0]
-        #    (In this specific case, the predicted order yields the exact same top 3)
-        #    DCG@3 = 3/log2(2) + 3/log2(3) + 2/log2(4) = 5.892
-        #
-        # 3. nDCG = DCG / IDCG = 1.0
         
         ndcg_k3 = self.analyzer.calculate_ndcg(predicted_scores, true_scores, k=3)
         self.assertAlmostEqual(ndcg_k3, 1.0, places=3)
         
         # Test a case with terrible predictions
         bad_predictions = np.array([0, 0, 0, 3, 2, 1])
-        # Predicted order: [3, 4, 5, 0, 1, 2]
-        # Corresponding *true* values: [0, 1, 2, 3, 2, 3]
-        # Taken Top 3: [0, 1, 2]
-        # DCG@3 = 0/log2(2) + 1/log2(3) + 2/log2(4) = 0 + 0.6309 + 1 = 1.6309
-        # nDCG = 1.6309 / 5.892 = 0.2768
-        
         ndcg_bad_k3 = self.analyzer.calculate_ndcg(bad_predictions, true_scores, k=3)
         self.assertTrue(ndcg_bad_k3 < 1.0)
         self.assertAlmostEqual(ndcg_bad_k3, 0.2768, places=3)

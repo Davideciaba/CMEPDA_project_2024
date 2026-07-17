@@ -11,9 +11,14 @@ import numpy as np
 import pandas as pd
 import nibabel as nib
 import sys
-import os
+import pathlib
 
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+# Dynamically resolve paths using pathlib
+current_dir= pathlib.Path(__file__).resolve().parent
+parent_dir= current_dir.parent
+
+# Add the parent directory to sys.path to allow imports from there
+sys.path.append(str(parent_dir))
 
 from Python.utils.tpm_mask_generator import TpmMaskGenerator
 from Python.utils.py_logger import CustomLogger

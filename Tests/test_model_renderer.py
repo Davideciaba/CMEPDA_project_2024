@@ -10,10 +10,14 @@ from unittest.mock import patch, MagicMock
 import numpy as np
 import pandas as pd
 import sys
-import os
+import pathlib
 
-# Path injection
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+# Dynamically resolve paths using pathlib
+current_dir= pathlib.Path(__file__).resolve().parent
+parent_dir= current_dir.parent
+
+# Add the parent directory to sys.path to allow imports from there
+sys.path.append(str(parent_dir))
 
 from Python.utils.model_renderer import ModelRenderer
 from Python.utils.py_logger import CustomLogger
