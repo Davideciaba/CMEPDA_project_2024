@@ -4,4 +4,3 @@ __pycache__/
 .env
 config.json
 *.joblib
-SVM_*.nii
