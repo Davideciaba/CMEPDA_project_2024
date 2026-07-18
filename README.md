@@ -31,11 +31,7 @@ The project features a decoupled architecture, meaning the Python and MATLAB pip
 ## MATLAB
 * **Environment**: The VBM Analysis and the other MATLAB classes and functions have been tested on MATLAB 2025b.
 * **Toolboxes**: The MATLAB pipeline requires the **Image Preprocessing Toolbox** and the **Statistics and Machine Learning Toolbox**. The codebase includes an automated Fail-Fast validator that will block execution if these licenses are missing.
-* **SPM**: The VBM Analysis requires SPM. Similarly to Python, you can duplicate the `config.example.json` file in the project's root directory, rename it to `config.json,` and set the `SPM_DIR` key to your local absolute SPM path (e.g., `{"SPM_DIR": "C:\\path\\to\\spm"}`). Alternatively, you can add SPM to your MATLAB path using:
-```bash 
-addpath('C:\Users\<login>\Documents\MATLAB\spm')
-savepath % if you want to save the current MATLAB path
-```
+* **SPM**: The VBM Analysis requires SPM. Similarly to Python, you can duplicate the `config.example.json` file in the project's root directory, rename it to `config.json,` and set the `SPM_DIR` key to your local absolute SPM path (e.g., `{"SPM_DIR": "C:\\path\\to\\spm"}`).
 
 # Data & Preprocessing
 The dataset utilized in this study comes from the [Retico et al. (2014)](https://doi.org/10.1111/jon.12163), comprising 144 subjects affected by AD and 189 healthy controls. 
