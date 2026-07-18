@@ -21,7 +21,7 @@ The aim of this repository is to test the interpretative capabilities of two Exp
 + [References](#references)
 
 # Prerequisites
-The project features a decoupled architecture, meaning the Python and MATLAB pipelines operate independently. If you only wish to execute the Python sections to evaluate the Linear Support Vector Machine (SVM) with the VBM Analysis, you can directly use the pre-computed MATLAB results already provided. Alternatively, the MATLAB sections can be executed natively within your MATLAB Desktop environment (or within your IDE with MATLAB extension).
+The project features a decoupled architecture, meaning the Python and MATLAB pipelines operate independently. If you only wish to execute the Python sections to evaluate the Linear Support Vector Machine (SVM) with the VBM Analysis, you can directly use the pre-computed MATLAB results already provided. Alternatively, the MATLAB sections can be executed natively within your MATLAB Desktop environment (or within your IDE with MATLAB extension). Both the environments requires [SPM](https://doi.org/10.21105/joss.08103). Please refer to SPM documentation: [https://www.fil.ion.ucl.ac.uk/spm/docs/](https://www.fil.ion.ucl.ac.uk/spm/docs/) to download the latest release (SPM25 tested).
 
 ## Python
 * **Environment**: The project requires Python 3.11 or higher.
@@ -31,7 +31,11 @@ The project features a decoupled architecture, meaning the Python and MATLAB pip
 ## MATLAB
 * **Environment**: The VBM Analysis and the other MATLAB classes and functions have been tested on MATLAB 2025b.
 * **Toolboxes**: The MATLAB pipeline requires the **Image Preprocessing Toolbox** and the **Statistics and Machine Learning Toolbox**. The codebase includes an automated Fail-Fast validator that will block execution if these licenses are missing.
-* **SPM**: The VBM Analysis requires SPM. Similarly to Python, you must duplicate the `config.example.json` file in the project's root directory, rename it to `config.json,` and set the `SPM_DIR` key to your local absolute SPM path (e.g., `{"SPM_DIR": "C:\\path\\to\\spm"}`).
+* **SPM**: The VBM Analysis requires SPM. Similarly to Python, you can duplicate the `config.example.json` file in the project's root directory, rename it to `config.json,` and set the `SPM_DIR` key to your local absolute SPM path (e.g., `{"SPM_DIR": "C:\\path\\to\\spm"}`). Alternatively, you can add SPM to your MATLAB path using:
+```bash 
+addpath('C:\Users\<login>\Documents\MATLAB\spm')
+savepath % if you want to save the current MATLAB path
+```
 
 # Data & Preprocessing
 The dataset utilized in this study comes from the [Retico et al. (2014)](https://doi.org/10.1111/jon.12163), comprising 144 subjects affected by AD and 189 healthy controls. 
@@ -238,3 +242,7 @@ The Machine Learning Model and the Explainable-AI approaches comes from the foll
 - **Gaonkar, B., Russell, T. S., Davatzikos, C.** (2015). Interpreting support vector machine models for multivariate group wise analysis in neuroimaging. Medical Image Analysis, 24, 1, 190-204. [DOI](https://doi.org/10.1016/j.media.2015.06.008)
 
 - **Bloch, L., & Friedrich, C. M.** (2024). Systematic comparison of 3D Deep learning and classical machine learning explanations for Alzheimer's Disease detection. Computers in Biology and Medicine, 170. [DOI](https://doi.org/10.1016/j.compbiomed.2024.108029)
+
+Stastistical Parametric Mapping (SPM):
+
+- **Tierney et al.,** (2025). SPM 25: open source neuroimaging analysis software. Journal of Open Source Software, 10(110), 8103, [DOI](https://doi.org/10.21105/joss.08103)
