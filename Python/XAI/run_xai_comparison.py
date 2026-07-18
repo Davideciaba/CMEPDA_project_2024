@@ -114,7 +114,7 @@ def run_xai_comparison(
             
         log.info(f"Processing individual folds for: {method_name}")
 
-        # --- INDIVIDUAL FOLD ANALYSIS ---
+        # --- Individual fold analysis ---
         for fold_path in paths_list:
             fold_name = fold_path.stem 
             
@@ -153,7 +153,7 @@ def run_xai_comparison(
                 score = analyzer.calculate_ndcg(pred_scores, true_scores, k=full_k)
                 ndcg_matrix.loc[ref_m, comp_m] = score
                 
-        # --- SALVATAGGIO CSV CON I VALORI NUMERICI ESATTI ---
+        # --- Save correlations in CSV file ---
         csv_matrix_path = plots_dir / "nDCG_Correlation_Matrix_Extended.csv"
         ndcg_matrix.to_csv(str(csv_matrix_path))
         log.success(f"Numeric nDCG Matrix exported to: {csv_matrix_path.name}")

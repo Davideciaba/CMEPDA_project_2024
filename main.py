@@ -30,7 +30,14 @@ def parse_args(argv=None) -> argparse.Namespace:
     Parses command line arguments to configure the execution flow and I/O parameters.
     """
     parser = argparse.ArgumentParser(
-        description="Launch Machine Learning and XAI Pipelines."
+        description=(
+            """
+            This script performs Alzheimer's Disease vs Healthy Control binary classification
+            using Support Vector Machine and tests the interpretative capabilites
+            of Haufe transformation and Gaonkar statistics against VBM analysis and SVM's raw weights
+            making a qualitative and quantitative analysis.
+            """
+        )
     )
     
     parser.add_argument(
@@ -61,7 +68,7 @@ def parse_args(argv=None) -> argparse.Namespace:
         "--csv-name", 
         type=str, 
         default="covariateADCTRLsexAgeTIV.csv", 
-        help="Name of the clinical covariate CSV file (Default: covariateADCTRLsexAgeTIV.csv)."
+        help="Name of the clinical covariate CSV file (Default: covariateADCTRLsexAgeTIV.csv in AD_CTRL directory)."
     )
 
     parser.add_argument(
