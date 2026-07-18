@@ -18,9 +18,6 @@ function main(options)
 
     % Resolve the project root
     projectRoot = fileparts(mfilename('fullpath'));
-    if isempty(projectRoot)
-        projectRoot = pwd;
-    end
 
     % Resolve default directories
     if isempty(options.outputDir)
@@ -31,37 +28,31 @@ function main(options)
     end
 
     % Add internal modules to MATLAB's search path
-    utilsPath = fullfile(projectRoot, 'MATLAB', 'utils');
-    if ~isfolder(utilsPath)
-        error('Directory not found: %s', utilsPath);
-    end
-    addpath(utilsPath);
-    vbmPath = fullfile(projectRoot, 'MATLAB', 'VBM_Pipeline');
-    if ~isfolder(vbmPath)
-        error('Directory not found: %s', vbmPath);
-    end
-    addpath(vbmPath);
-    maskCompPath = fullfile(projectRoot, 'MATLAB', 'Mask_Comparison');
-    if ~isfolder(maskCompPath)
-        error('Directory not found: %s', maskCompPath);
-    end
-    addpath(maskCompPath);
+    utilsPath = fullfile(projectRoot, "MATLAB", "utils");
+    vbmPath = fullfile(projectRoot, "MATLAB", "VBM_Pipeline");
+    maskCompPath = fullfile(projectRoot, "MATLAB", "Mask_Comparison");
 
-    % Early environment validation
-    try
-        validateMatlabEnv();
-    catch ME
-        % Clean up injected paths
-        rmpath(utilsPath, vbmPath, maskCompPath); 
-        rethrow(ME);
+    if ~isfolder(utilsPath) || ~isfolder(vbmPath) || ~isfolder(maskCompPath)
+        error('main:MissingDirectories', ...
+            'One or more required directories (utils, VBM_Pipeline, Mask_Comparison) were not found.');
     end
+
+    addpath(utilsPath, vbmPath, maskCompPath);
+
+    % Clean up utility paths on exit
+    cleanerPath = onCleanup(@() rmpath(utilsPath, vbmPath, maskCompPath));
 
     % Initialize the logger to track the orchestrator's state
     logger = Logger('Orchestrator');
     logger.addConsoleHandler('level', 'DEBUG', 'useColors', true);
     
-    % Clean up utility paths and logger on exit
-    cleanerPath = onCleanup(@() rmpath(utilsPath, vbmPath, maskCompPath));
+    % Environment validation
+    try
+        validateMatlabEnv();
+    catch ME
+        logger.error('Environment validation failed: %s', ME.message);
+        rethrow(ME);
+    end
 
     if ~options.runVBM && ~options.runMaskComp
         logger.warning('No execution flags provided. Pass ''runVBM'', true or ''runMaskComp'', true to begin.');
@@ -72,7 +63,7 @@ function main(options)
         logger.info('Global File Logging Enabled: %s', mat2str(options.enableFileLogging));
         logger.info('Global Output Directory mapped to: %s', options.outputDir);
         logger.info('Global Input Directory mapped to: %s', options.inputDir);
-        logger.info('Target Clinical CSV: %s', options.csvName);
+        logger.info('Target Clinical CSV file: %s', options.csvName);
 
         % --- Execute VBM Pipeline ---
         if options.runVBM

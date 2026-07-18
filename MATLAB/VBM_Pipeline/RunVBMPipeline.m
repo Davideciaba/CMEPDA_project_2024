@@ -70,9 +70,6 @@ function RunVBMPipeline(enableFileLogging, outputDir, inputDir, csvName)
     end
     addpath(utilsPath);
 
-    % Verify toolboxes
-    validateMatlabEnv();
-
     % Purge existing output directories
     resetDirectory(plotsDir);
     resetDirectory(resultsDir);
@@ -81,6 +78,14 @@ function RunVBMPipeline(enableFileLogging, outputDir, inputDir, csvName)
     logger = Logger('VBMPipeline');
     logger.addConsoleHandler('level', 'DEBUG', 'useColors', true);
     logger.success('Console logging successfully initialized.');
+
+    % Verify toolboxes
+    try
+        validateMatlabEnv();
+    catch ME
+        logger.error('Environment validation failed: %s', ME.message);
+        rethrow(ME);
+    end
 
     if enableFileLogging
         % Make the file logging directory

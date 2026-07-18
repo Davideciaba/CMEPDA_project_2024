@@ -87,15 +87,20 @@ function RunMaskComparison(enableFileLogging, outputDir, inputDir, csvName)
         end
         addpath(utilsPath);
 
-        % Verify toolboxes
-        validateMatlabEnv();
-
         % Wipe existing output directories
         resetDirectory(plotsDir);
         resetDirectory(resultsDir);
 
         logger = Logger('MaskComparison');
         logger.addConsoleHandler('level', 'DEBUG', 'useColors', true);
+
+        % Verify toolboxes
+        try
+                validateMatlabEnv();
+        catch ME
+                logger.error('Environment validation failed: %s', ME.message);
+                rethrow(ME);
+        end
 
         if enableFileLogging
                 resetDirectory(logDir);
