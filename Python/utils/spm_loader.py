@@ -11,21 +11,54 @@ from dotenv import load_dotenv
 
 ENV_VAR_NAME = "SPM_DIR"
 DOTENV_FILE = ".env"
+PROJECT_BOUNDARY = "CMEPDA_project_2024"
+SPM_SIGNATURE = "spm.m"
+
+def _find_env_file(start_path: Path) -> Path | None:
+    """
+    Traverses upwards from a given starting path to locate the .env file.
+    Halts if the specific project directory is reached.
+    """
+    current_path = start_path.resolve()
+    
+    while True:
+        potential_env = current_path / DOTENV_FILE
+
+        if potential_env.is_file():
+            return potential_env
+        
+        if current_path.name == PROJECT_BOUNDARY or current_path.parent == current_path:
+            break
+            
+        current_path = current_path.parent
+
+    return None
 
 def load_spm_environment() -> Path:
     """
     Locates the SPM directory via environment variable or .env file,
     validates its existence, and prioritizes it in the system path.
     """
-    # Load .env file into environment variables
-    load_dotenv(dotenv_path=DOTENV_FILE)
+    # Search upwards from cwd
+    cwd_path = Path.cwd()
+    env_path = _find_env_file(cwd_path)
+
+    # Search upwards from script location
+    if not env_path:
+        script_path = Path(__file__).resolve().parent
+        env_path = _find_env_file(script_path)
+
+        
+    if env_path:
+        # Load .env file into environment variables
+        load_dotenv(dotenv_path=DOTENV_FILE)
 
     spm_dir_str = os.getenv(ENV_VAR_NAME)
 
     if not spm_dir_str:
         raise EnvironmentError(
-            f"SPM path not found. Please set the '{ENV_VAR_NAME}' "
-            f"environment variable or create a '{DOTENV_FILE}' file in the root."
+            f"SPM path not found. Set the '{ENV_VAR_NAME}' env variable or "
+            f"ensure a '{DOTENV_FILE}' file exists within {PROJECT_BOUNDARY}."
         )
 
     spm_path = Path(spm_dir_str).resolve()
@@ -35,12 +68,28 @@ def load_spm_environment() -> Path:
             f"The SPM directory specified does not exist: {spm_path}. "
             "Please verify your configuration."
         )
+    
+    # Verify the target directory is actually an SPM installation
+    if not (spm_path / SPM_SIGNATURE).is_file():
+        raise FileNotFoundError(
+            f"Invalid SPM directory. Signature '{SPM_SIGNATURE}' missing in {spm_path}."
+        )
 
-    # Ensure the target SPM directory is at the top of sys.path.
     spm_path_str = str(spm_path)
-    if spm_path_str in sys.path:
-        sys.path.remove(spm_path_str)
-        
+
+    # Identify and remove any existing SPM paths to prevent version conflicts
+    paths_to_remove = []
+    for path_entry in sys.path:
+        entry_path = Path(path_entry)
+        # Check if the path itself is the SPM target or contains the signature file
+        if path_entry == spm_path_str or (entry_path / SPM_SIGNATURE).is_file():
+            paths_to_remove.append(path_entry)
+
+            
+    for obsolete_path in paths_to_remove:
+        sys.path.remove(obsolete_path)
+
+    # Inject the correct SPM path with maximum priority
     sys.path.insert(0, spm_path_str)
 
     return spm_path

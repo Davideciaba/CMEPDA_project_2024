@@ -3,40 +3,29 @@ function spmPath = loadSpmEnvironment()
     %
     % Purpose:
     %   Finds the SPM installation directory using the SPM_DIR environment variable
-    %   or an upwards directory to locate config.json in the project root.
-    %   It then removes older SPM paths from the current MATLAB session before 
-    %   injecting the targeted SPM path at the top of the search path.
+    %   or an upwards directory search to locate config.json in the CMEPDA_project_2024 root.
     %
     % Returns:
     %   spmPath (char): The absolute validated path to the SPM directory.
 
     ENV_VAR_NAME = 'SPM_DIR';
     CONFIG_FILENAME = 'config.json';
+    PROJECT_BOUNDARY = 'CMEPDA_project_2024';
+    SPM_SIGNATURE = 'spm.m';
 
     % Attempt to read from environment variable
     spmPath = getenv(ENV_VAR_NAME);
 
     % Fallback to local configuration
     if isempty(spmPath)
-        % Get the absolute path of the directory containing this script
-        scriptDir = fileparts(mfilename('fullpath'));
-        currentScanDir = scriptDir;
-        configFilePath = '';
         
-        % Go upwards until config.json is found or root directory is reached
-        while true
-            potentialPath = fullfile(currentScanDir, CONFIG_FILENAME);
-            if isfile(potentialPath)
-                configFilePath = potentialPath;
-                break;
-            end
-            
-            parentDir = fileparts(currentScanDir);
-            if strcmp(currentScanDir, parentDir) 
-                % Root directory reached, stop searching
-                break;
-            end
-            currentScanDir = parentDir;
+        % Search upwards from pwd
+        configFilePath = findConfigFile(pwd, CONFIG_FILENAME, PROJECT_BOUNDARY);
+        
+        % Search upwards from script dir
+        if isempty(configFilePath)
+            scriptDir = fileparts(mfilename('fullpath'));
+            configFilePath = findConfigFile(scriptDir, CONFIG_FILENAME, PROJECT_BOUNDARY);
         end
 
         % If the file was found during traversal, parse its contents
@@ -57,8 +46,8 @@ function spmPath = loadSpmEnvironment()
     % Validate existence
     if isempty(spmPath)
         error('loadSpmEnvironment:ConfigurationMissing', ...
-            'SPM directory is undefined. Set %s environment variable or place %s in the project root.', ...
-            ENV_VAR_NAME, CONFIG_FILENAME);
+            'SPM directory is undefined. Set %s env variable or provide %s in %s.', ...
+            ENV_VAR_NAME, CONFIG_FILENAME, PROJECT_BOUNDARY);
     end
 
     % Validate directory
@@ -67,12 +56,17 @@ function spmPath = loadSpmEnvironment()
             'The resolved SPM directory does not exist on disk: %s', spmPath);
     end
 
+    if ~isfile(fullfile(spmPath, SPM_SIGNATURE))
+        error('loadSpmEnvironment:InvalidSpmSuite', ...
+            'Signature file %s missing in %s. Not a valid SPM directory.', ...
+            SPM_SIGNATURE, spmPath);
+    end
+
     % Absolute path for string comparisons
     spmPath = char(fullfile(spmPath));
-    spmPath = char(string(spmPath));
 
     % Find all existing registered spm.m files in the current environment
-    existingSpmInstances = which('spm.m', '-all');
+    existingSpmInstances = which(SPM_SIGNATURE, '-all');
     
     if ~isempty(existingSpmInstances)
         for idx = 1:length(existingSpmInstances)
@@ -102,4 +96,29 @@ function spmPath = loadSpmEnvironment()
 
     % Inject the SPM target at the top of the search path
     addpath(spmPath, '-begin');
+end
+
+function configPath = findConfigFile(startDir, fileName, stopDirName)
+    % FINDCONFIGFILE Local helper to search for a file upwards.
+    
+    currentScanDir = startDir;
+    configPath = '';
+    
+    while true
+        potentialPath = fullfile(currentScanDir, fileName);
+        if isfile(potentialPath)
+            configPath = potentialPath;
+            break;
+        end
+        
+        [parentDir, currentName, ext] = fileparts(currentScanDir);
+        fullCurrentName = [currentName, ext];
+        
+        % Stop conditions: Project root reached OR system root reached
+        if strcmp(fullCurrentName, stopDirName) || strcmp(currentScanDir, parentDir) 
+            break;
+        end
+        
+        currentScanDir = parentDir;
+    end
 end
