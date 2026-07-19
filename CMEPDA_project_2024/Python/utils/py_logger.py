@@ -50,7 +50,6 @@ class CustomLogger:
         logger.remove()
 
         # Patch the logger globally for this instance to inject the context map
-        # It is like formatContext in MATLAB Logger.m
         self._logger = logger.patch(self._patch_record)
 
     def set_level(self, level_name: str) -> None:
@@ -226,11 +225,18 @@ class CustomLogger:
         Safely dismounts file handlers.
         
         PURPOSE:
-            Iterates through all sinks to ensure file handles are closed properly
-            and performs garbage collection on 0-byte files (preventing disk clutter).
+            Iterates exclusively through the sinks owned by this instance 
+            to ensure file handles are closed properly.
         """
         # Detach all loguru handlers
-        logger.remove()
+        for sink_id in self._sinks_config.values():
+            try:
+                logger.remove(sink_id)
+            except ValueError:
+                # The sink has already been detached globally or manually
+                pass
+
+        self._sinks_config.clear()
         
         # Garbage Collection
         for filename in self._file_sinks:
@@ -241,7 +247,6 @@ class CustomLogger:
                 print(f"Warning: Failed to delete empty log file: {filename}. OS Reason: {e}")
         
         self._file_sinks.clear()
-        self._sinks_config.clear()
 
     def __del__(self) -> None:
         """Destructor triggers automated shutdown and handler release."""
