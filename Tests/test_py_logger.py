@@ -13,12 +13,13 @@ import io
 import tempfile
 from unittest.mock import patch
 
-
 current_dir= pathlib.Path(__file__).resolve().parent
 project_dir= current_dir.parent
+python_dir = project_dir / "CMEPDA_project_2024" / "Python" 
 
-# Add the project directory to sys.path
+# Add the project and Python directory to sys.path
 sys.path.append(str(project_dir))
+sys.path.append(str(python_dir))
 
 from CMEPDA_project_2024.Python.utils.py_logger import CustomLogger
 
