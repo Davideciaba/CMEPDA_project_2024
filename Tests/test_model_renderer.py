@@ -6,6 +6,7 @@ Validates the structural robustness of the rendering logic, ensuring that
 dimension mismatches are blocked before attempting complex Matplotlib operations.
 """
 import unittest
+import shutil
 from unittest.mock import patch, MagicMock
 import numpy as np
 import pandas as pd
@@ -45,6 +46,14 @@ class TestModelRenderer(unittest.TestCase):
             'ROI_Name': ['A', 'B', 'C'], 
             'Mean_ROI_Signal': [0.5, -0.8, 0.2]
         })
+
+    def tearDown(self) -> None:
+        """
+        Cleans up the file system after each test is completed.
+        """
+        target_directory = pathlib.Path(self.output_dir)
+        if target_directory.exists() and target_directory.is_dir():
+            shutil.rmtree(target_directory, ignore_errors=True)
 
     @patch('CMEPDA_project_2024.Python.utils.model_renderer.plt.savefig')
     @patch('CMEPDA_project_2024.Python.utils.model_renderer.nib.load')
