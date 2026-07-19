@@ -7,24 +7,24 @@ Validates the dense linear algebra associated with the Haufe Transform and Gaonk
 """
 import sys
 import pathlib
-
-# Dynamically resolve paths using pathlib
-current_dir= pathlib.Path(__file__).resolve().parent
-parent_dir= current_dir.parent
-
-# Add the parent directory to sys.path to allow imports from there
-sys.path.append(str(parent_dir))
-
 import unittest
 from unittest.mock import patch
 import numpy as np
 
-from Python.utils.xai_svm import SVMExplainer
-from Python.utils.py_logger import CustomLogger
+current_dir= pathlib.Path(__file__).resolve().parent
+project_dir= current_dir.parent
+python_dir = project_dir / "CMEPDA_project_2024" / "Python" 
+
+# Add the project and Python directory to sys.path
+sys.path.append(str(project_dir))
+sys.path.append(str(python_dir))
+
+from CMEPDA_project_2024.Python.utils.xai_svm import SVMExplainer
+from CMEPDA_project_2024.Python.utils.py_logger import CustomLogger
 
 class TestSVMAnalyticalXAI(unittest.TestCase):
     """
-    Test suite for Python.utils.xai_svm.SVMExplainer.
+    Test suite for SVMExplainer.
     
     PURPOSE:
         Validates algebraic matrix manipulations, checking if dimensionality 

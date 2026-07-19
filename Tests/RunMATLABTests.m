@@ -12,7 +12,7 @@ function RunMATLABTests()
     projectRoot = fileparts(scriptPath);
 
     % Path to the Logger class
-    utilsPath = fullfile(projectRoot, 'MATLAB', 'utils');
+    utilsPath = fullfile(projectRoot, 'CMEPDA_project_2024', 'MATLAB', 'utils');
 
     fprintf('Configuring Test Environment...\n');
     % Add utils path for utility functions

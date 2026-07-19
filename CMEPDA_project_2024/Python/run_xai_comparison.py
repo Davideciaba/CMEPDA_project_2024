@@ -10,10 +10,10 @@ from pathlib import Path
 from typing import Optional
 import pandas as pd
 
-from Python.utils.py_logger import CustomLogger
-from Python.utils.model_renderer import ModelRenderer
-from Python.utils.roi_analyzer import ROIAnalyzer
-from Python.utils.reset_directory import reset_directory
+from utils.py_logger import CustomLogger
+from utils.model_renderer import ModelRenderer
+from utils.roi_analyzer import ROIAnalyzer
+from utils.reset_directory import reset_directory
 
 def run_xai_comparison(
     enable_file_logging: bool = False, 
@@ -34,11 +34,12 @@ def run_xai_comparison(
     """
     current_dir = Path(__file__).parent.resolve()
     base_out = output_dir.resolve() if output_dir else current_dir
+    project_root_dir = current_dir.parent.parent
+    source_dir = input_dir.resolve() if input_dir else project_root_dir / "AD_CTRL"
+    atlas_path = source_dir / "labels_Neuromorphometrics.nii"
+    atlas_csv_path = source_dir / "spm_atlas_labels.csv"
 
-    atlas_path = input_dir / "labels_Neuromorphometrics.nii"
-    atlas_csv_path = input_dir / "spm_atlas_labels.csv"
-
-    matlab_results_dir = base_out.parent / "MATLAB_Results"
+    matlab_results_dir = project_root_dir / "MATLAB_Results"
     vbm_path = matlab_results_dir / "VBM_Pipeline_Results" / "Results" / "TPM_Mask_FWE_corrected_map.nii"
     
     xai_maps_dir = base_out / "SVM_XAI_Results" / "Results"
@@ -71,7 +72,7 @@ def run_xai_comparison(
     plotter = ModelRenderer(log, str(plots_dir))
     
     if not atlas_path.exists() or not atlas_csv_path.exists():
-        log.critical(f"FATAL: Neuromorphometrics Atlas files missing in {input_dir}.")
+        log.critical(f"FATAL: Neuromorphometrics Atlas files missing in {source_dir}.")
         sys.exit(1)
 
     heatmap_columns = {}
@@ -182,6 +183,3 @@ def run_xai_comparison(
         log.warning("Phase 4 Skipped: Not enough valid maps to generate Heatmap.")
 
     log.success("--- XAI Comparison Completed ---")
-
-if __name__ == "__main__":
-    run_xai_comparison()

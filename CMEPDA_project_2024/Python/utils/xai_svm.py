@@ -12,7 +12,7 @@ import nibabel as nib
 from statsmodels.stats.multitest import multipletests
 from typing import Tuple
 
-from Python.utils.py_logger import CustomLogger
+from utils.py_logger import CustomLogger
 
 class SVMExplainer:
     """

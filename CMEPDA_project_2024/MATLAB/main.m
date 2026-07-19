@@ -17,7 +17,8 @@ function main(options)
     end
 
     % Resolve the project root
-    projectRoot = fileparts(mfilename('fullpath'));
+    MATLABPath = fileparts(mfilename('fullpath'));
+    projectRoot = fileparts(fileparts(MATLABPath));
 
     % Resolve default directories
     if isempty(options.outputDir)
@@ -28,19 +29,17 @@ function main(options)
     end
 
     % Add internal modules to MATLAB's search path
-    utilsPath = fullfile(projectRoot, "MATLAB", "utils");
-    vbmPath = fullfile(projectRoot, "MATLAB", "VBM_Pipeline");
-    maskCompPath = fullfile(projectRoot, "MATLAB", "Mask_Comparison");
+    utilsPath = fullfile(MATLABPath, "utils");
 
-    if ~isfolder(utilsPath) || ~isfolder(vbmPath) || ~isfolder(maskCompPath)
+    if ~isfolder(utilsPath) || ~isfolder(MATLABPath)
         error('main:MissingDirectories', ...
-            'One or more required directories (utils, VBM_Pipeline, Mask_Comparison) were not found.');
+            'One or more required directories (MATLAB/utils, MATLAB) were not found.');
     end
 
-    addpath(utilsPath, vbmPath, maskCompPath);
+    addpath(utilsPath, MATLABPath);
 
     % Clean up utility paths on exit
-    cleanerPath = onCleanup(@() rmpath(utilsPath, vbmPath, maskCompPath));
+    cleanerPath = onCleanup(@() rmpath(utilsPath, MATLABPath));
 
     % Initialize the logger to track the orchestrator's state
     logger = Logger('Orchestrator');

@@ -15,19 +15,21 @@ import math
 from sklearn.svm import SVC
 from sklearn.pipeline import Pipeline
 
-# Dynamically resolve paths using pathlib
 current_dir= pathlib.Path(__file__).resolve().parent
-parent_dir= current_dir.parent
+project_dir= current_dir.parent
+python_dir = project_dir / "CMEPDA_project_2024" / "Python" 
 
-# Add the parent directory to sys.path to allow imports from there
-sys.path.append(str(parent_dir))
+# Add the project and Python directory to sys.path
+sys.path.append(str(project_dir))
+sys.path.append(str(python_dir))
 
-from Python.Models.svm_classifier import SVMClassifier
-from Python.utils.py_logger import CustomLogger
+
+from CMEPDA_project_2024.Python.svm_classifier import SVMClassifier
+from CMEPDA_project_2024.Python.utils.py_logger import CustomLogger
 
 class TestSVMEngine(unittest.TestCase):
     """
-    Test suite for Python.Models.svm_classifier.SVMClassifier.
+    Test suite for SVMClassifier.
     
     PURPOSE:
         Validates clinical metric calculations, pipeline, GridSearch 
@@ -86,7 +88,7 @@ class TestSVMEngine(unittest.TestCase):
         test_indices = np.array([5, 6, 7, 8, 9, 15, 16, 17, 18, 19])
         dummy_inner_cv = [(train_indices, test_indices)]
              
-        best_c, mean_cv, std_cv, best_model = self.engine.train(X_train, y_train, inner_cv_iterator=dummy_inner_cv)
+        best_c, _, _, best_model = self.engine.train(X_train, y_train, inner_cv_iterator=dummy_inner_cv)
                  
         self.assertIn(best_c, [0.1, 1.0])
         self.assertIsInstance(best_model, Pipeline)
@@ -107,14 +109,14 @@ class TestSVMEngine(unittest.TestCase):
         self.assertEqual(len(y_pred), 3)
         self.assertEqual(y_prob[1], 0.8, "Probability extraction failed to target the positive class.")
              
-    @patch('Python.Models.svm_classifier.pd.read_csv', side_effect=FileNotFoundError)
-    def test_load_real_data_file_missing(self, mock_read_csv) -> None:
+    @patch('CMEPDA_project_2024.Python.svm_classifier.pd.read_csv', side_effect=FileNotFoundError)
+    def test_load_real_data_file_missing(self, mock_read_csv: MagicMock) -> None:
         """Validates that the Engine correctly aborts if data files are missing."""
         with self.assertRaises(FileNotFoundError):
-            SVMClassifier.load_data("missing.csv", "missing_mask.nii")
+            SVMClassifier.load_data("missing.csv", "missing_mask.nii", "dummy_base_dir")
 
-    @patch('Python.Models.svm_classifier.pd.read_csv')
-    @patch('Python.Models.svm_classifier.nib.load')
+    @patch('CMEPDA_project_2024.Python.svm_classifier.pd.read_csv')
+    @patch('CMEPDA_project_2024.Python.svm_classifier.nib.load')
     def test_load_real_data_success(self, mock_nib_load, mock_read_csv) -> None:
         """
         Mocks the OS file system to validate structural 3D-to-1D flattening and parsing.
@@ -129,7 +131,7 @@ class TestSVMEngine(unittest.TestCase):
         mock_img.get_fdata.return_value = np.ones((10, 10, 10))
         mock_nib_load.return_value = mock_img
                  
-        subjects, X_data, y_data = SVMClassifier.load_data("dummy.csv", "mask.nii")
+        subjects, X_data, y_data = SVMClassifier.load_data("dummy.csv", "mask.nii", "dummy_base_dir")
                  
         self.assertEqual(X_data.shape, (2, 1000))
         self.assertEqual(len(subjects), 2)

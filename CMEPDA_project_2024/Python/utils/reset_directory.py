@@ -6,7 +6,7 @@ Provides a centralized utility for safely purging and recreating directories.
 import sys
 from pathlib import Path
 import shutil
-from Python.utils.py_logger import CustomLogger
+from utils.py_logger import CustomLogger
 
 def reset_directory(dir_path: Path, log: CustomLogger) -> None:
     """

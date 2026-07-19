@@ -12,13 +12,13 @@ import pandas as pd
 import joblib
 from typing import Optional, List
 
-from Python.utils.py_logger import CustomLogger
-from Python.utils.cv_manager import CVManager
-from Python.utils.tpm_mask_generator import TpmMaskGenerator
-from Python.Models.svm_classifier import SVMClassifier
-from Python.utils.model_renderer import ModelRenderer
-from Python.utils.spm_loader import load_spm_environment
-from Python.utils.reset_directory import reset_directory
+from utils.py_logger import CustomLogger
+from utils.cv_manager import CVManager
+from utils.tpm_mask_generator import TpmMaskGenerator
+from svm_classifier import SVMClassifier
+from utils.model_renderer import ModelRenderer
+from utils.spm_loader import load_spm_environment
+from utils.reset_directory import reset_directory
 
 
 def run_svm_classification(
@@ -61,6 +61,10 @@ def run_svm_classification(
     plots_dir = svm_base / "Plots"
     log_dir = svm_base / "Log_Files"
     csv_out_path = results_dir / "SVM_CV_Metrics.csv"
+    if input_dir:
+        project_base_dir = input_dir.parent.resolve()
+    else:
+        project_base_dir = current_dir.parent.parent.resolve()
 
     # Logger initialization
     log = CustomLogger(name="SVMClassification")
@@ -140,7 +144,7 @@ def run_svm_classification(
     if not registry_csv_path.exists() or not folds_json_path.exists():
         log.warning("Common setup missing. Automatically triggering Setup (cv_setup)...")
         try:
-            from Python.Common_Setup.cv_setup import cv_setup
+            from cv_setup import cv_setup
             cv_setup(
                 enable_file_logging=enable_file_logging, 
                 output_dir=base_out, 
@@ -176,7 +180,8 @@ def run_svm_classification(
             mask_generator.generate_mask(
                 registry_csv_path=str(registry_csv_path),
                 tpm_nifti_path=str(tpm_source_path),
-                output_mask_path=str(mask_path)
+                output_mask_path=str(mask_path),
+                base_dir=str(project_base_dir)
             )
         except Exception as e:
             log.critical(f"FATAL: Could not generate TPM mask. Details: {e}")
@@ -187,7 +192,7 @@ def run_svm_classification(
     log.info("Phase 2: Loading cohort registry and TPM mask...")
     svm_engine = SVMClassifier(logger=log, param_grid=active_c_grid, inner_folds=inner_folds)
     
-    subjects, X_full, y_full = svm_engine.load_data(str(registry_csv_path), str(mask_path))
+    subjects, X_full, y_full = svm_engine.load_data(str(registry_csv_path), str(mask_path), str(project_base_dir))
     log.success(f"Data Loaded: {X_full.shape[0]} subjects ready.")
 
     log.info("Phase 3: Loading Cross-Validation split registry...")

@@ -5,23 +5,19 @@ Orchestrates the entire Python Machine Learning pipeline sequentially.
 Given the previous execution of the MATLAB VBM Analysis, this script manages:
 0. Setup (Phase 0)
 1. Linear SVM Training and Double CV
-2. EfficientNet Deep Learning Training and Nested CV
-3. Explainable AI (XAI) feature attribution maps generation.
+2. Explainable AI (XAI) feature attribution maps generation.
+3. SVM XAI vs VBM Analysis comparison
 """
 import argparse
 import sys
 import traceback
 from pathlib import Path
 
-project_root = Path(__file__).resolve().parent
-if str(project_root) not in sys.path:
-    sys.path.insert(0, str(project_root))
-
-from Python.Common_Setup.cv_setup import cv_setup
-from Python.SVM_Pipeline.run_svm_classification import run_svm_classification
-from Python.SVM_Pipeline.run_svm_xai import run_svm_xai
-from Python.utils.py_logger import CustomLogger
-from Python.XAI.run_xai_comparison import run_xai_comparison
+from cv_setup import cv_setup
+from run_svm_classification import run_svm_classification
+from run_svm_xai import run_svm_xai
+from utils.py_logger import CustomLogger
+from run_xai_comparison import run_xai_comparison
 
 
 
@@ -29,6 +25,8 @@ def parse_args(argv=None) -> argparse.Namespace:
     """
     Parses command line arguments to configure the execution flow and I/O parameters.
     """
+    project_root = Path(__file__).resolve().parent.parent.parent
+
     parser = argparse.ArgumentParser(
         description=(
             """
@@ -196,7 +194,8 @@ def main(argv=None) -> int:
             logger.info("--- Handing execution over to XAI extractors ---")
             run_svm_xai(
                 enable_file_logging=args.enable_file_logging, 
-                output_dir=active_output_dir
+                output_dir=active_output_dir,
+                input_dir=active_input_dir
             )
             logger.success("XAI Generation completed successfully.")
 

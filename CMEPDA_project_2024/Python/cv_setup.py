@@ -12,9 +12,9 @@ from pathlib import Path
 import pandas as pd
 from typing import Optional
 
-from Python.utils.py_logger import CustomLogger
-from Python.utils.cv_manager import CVManager
-from Python.utils.reset_directory import reset_directory
+from utils.py_logger import CustomLogger
+from utils.cv_manager import CVManager
+from utils.reset_directory import reset_directory
 
 
 def cv_setup(
@@ -116,9 +116,9 @@ def cv_setup(
         
     registry_df = pd.DataFrame(registry_data)
     registry_df.to_csv(registry_csv_path, index=False)
-    log.success(f"Registry built: saved {len(registry_df)} validated subjects to '{registry_csv_path.name}'.")
+    log.success(f"Registry built: saved {len(registry_df)} validated subjects to '{registry_csv_path}'.")
 
-    log.info("Generating and freezing the nested CV topology ({outer_folds} Outer, {inner_folds} Inner)...")
+    log.info(f"Generating and freezing the nested CV topology ({outer_folds} Outer, {inner_folds} Inner)...")
     y_target = registry_df['label'].values
     subjects = registry_df['subject_id'].values
     

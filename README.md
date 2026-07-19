@@ -160,13 +160,30 @@ The feature importance — used for the construction of global heatmaps and the 
 # Usage
 Due to the dimension of the model's weights we were not able to upload them on github. To avoid the problem and make the user able to test the code using our tuned results we uploaded them at the following link: [Weights](https://drive.google.com/drive/folders/1vJJEUFFgmrWvrM_9QjdptaV1J5LFpE6y?usp=sharing). The user has to move the folder to the `\Python_Results\SVM_Classification_Results` folder and replace the `Results` folder before running the code.
 
-In case you are running this code for the first time remember to install the requirements.
+In case you are running this code for the first time remember to install the requirements:
 
 ```bash
-cd CMEPDA_project_2024
 pip install -r requirements.txt 
-python main.py
 ```
+
+In order to run the Python pipeline as intended, you need to pass the functions with this order:
+```bash
+cd CMEPDA_project_2024/CMEPDA_project_2024/Python
+python main.py -set -svm -xai -cv 0.0001 0.001 -xc    
+```
+
+To execute the MATLAB pipeline, you can run the following commands in the MATLAB Command Window:
+```bash
+% Execute the standard VBM Pipeline
+cd CMEPDA_project_2024/CMEPDA_project_2024/MATLAB
+main('runVBM', true)
+```
+```bash
+% Execute the Mask Comparison
+cd CMEPDA_project_2024/CMEPDA_project_2024/MATLAB
+main('runMaskComp', true)
+```
+
 Refer to help for the different sections of the Matlab and Python orchestrators:
 ```bash
 >> help main
@@ -211,19 +228,6 @@ options:
                         Number of outer cross-validation folds. Default: 5
   -inf INNER_FOLDS, --inner-folds INNER_FOLDS
                         Number of inner cross-validation folds. Default: 5
-```
-To execute the MATLAB pipeline, you can run the following commands in the MATLAB Command Window:
-```bash
-% Execute the standard VBM Pipeline
-main('runVBM', true)
-
-% Execute the Mask Comparison
-main('runMaskComp', true)
-```
-
-In order to run the Python pipeline as intended, you need to pass the functions with this order:
-```bash
-python main.py -set -svm -xai -cv 0.0001 0.001 -xc    
 ```
 
 # References

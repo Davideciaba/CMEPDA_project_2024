@@ -11,18 +11,19 @@ import sys
 import os
 import tempfile
 import pathlib
-# Dynamically resolve paths using pathlib
+
+
 current_dir= pathlib.Path(__file__).resolve().parent
-parent_dir= current_dir.parent
+project_dir= current_dir.parent
 
-# Add the parent directory to sys.path to allow imports from there
-sys.path.append(str(parent_dir))
+# Add the project directory to sys.path
+sys.path.append(str(project_dir))
 
-from Python.utils.cv_manager import CVManager
+from CMEPDA_project_2024.Python.utils.cv_manager import CVManager
 
 class TestCVManager(unittest.TestCase):
     """
-    Test suite for Python.utils.cv_manager.CVManager.
+    Test suite for CVManager.
     
     PURPOSE:
         Validates the mathematical distribution of indices across the Double 

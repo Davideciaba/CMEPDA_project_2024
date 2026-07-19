@@ -10,7 +10,6 @@ function spmPath = loadSpmEnvironment()
 
     ENV_VAR_NAME = 'SPM_DIR';
     CONFIG_FILENAME = 'config.json';
-    PROJECT_BOUNDARY = 'CMEPDA_project_2024';
     SPM_SIGNATURE = 'spm.m';
 
     % Attempt to read from environment variable
@@ -20,12 +19,12 @@ function spmPath = loadSpmEnvironment()
     if isempty(spmPath)
         
         % Search upwards from pwd
-        configFilePath = findConfigFile(pwd, CONFIG_FILENAME, PROJECT_BOUNDARY);
+        configFilePath = findConfigFile(pwd, CONFIG_FILENAME);
         
         % Search upwards from script dir
         if isempty(configFilePath)
             scriptDir = fileparts(mfilename('fullpath'));
-            configFilePath = findConfigFile(scriptDir, CONFIG_FILENAME, PROJECT_BOUNDARY);
+            configFilePath = findConfigFile(scriptDir, CONFIG_FILENAME);
         end
 
         % If the file was found during traversal, parse its contents
@@ -47,7 +46,7 @@ function spmPath = loadSpmEnvironment()
     if isempty(spmPath)
         error('loadSpmEnvironment:ConfigurationMissing', ...
             'SPM directory is undefined. Set %s env variable or provide %s in %s.', ...
-            ENV_VAR_NAME, CONFIG_FILENAME, PROJECT_BOUNDARY);
+            ENV_VAR_NAME, CONFIG_FILENAME, fileparts(PROJECT_BOUNDARY));
     end
 
     % Validate directory
@@ -98,7 +97,7 @@ function spmPath = loadSpmEnvironment()
     addpath(spmPath, '-begin');
 end
 
-function configPath = findConfigFile(startDir, fileName, stopDirName)
+function configPath = findConfigFile(startDir, fileName)
     % FINDCONFIGFILE Local helper to search for a file upwards.
     
     currentScanDir = startDir;
@@ -111,11 +110,10 @@ function configPath = findConfigFile(startDir, fileName, stopDirName)
             break;
         end
         
-        [parentDir, currentName, ext] = fileparts(currentScanDir);
-        fullCurrentName = [currentName, ext];
+        parentDir= fileparts(currentScanDir);
         
-        % Stop conditions: Project root reached OR system root reached
-        if strcmp(fullCurrentName, stopDirName) || strcmp(currentScanDir, parentDir) 
+        % Stop conditions: system root reached
+        if strcmp(currentScanDir, parentDir) 
             break;
         end
         

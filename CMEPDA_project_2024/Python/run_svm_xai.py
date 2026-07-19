@@ -14,19 +14,20 @@ import nibabel as nib
 import joblib
 from typing import Optional
 
-from Python.utils.py_logger import CustomLogger
-from Python.utils.cv_manager import CVManager
-from Python.utils.spm_loader import load_spm_environment
-from Python.utils.tpm_mask_generator import TpmMaskGenerator
-from Python.Models.svm_classifier import SVMClassifier
-from Python.utils.model_renderer import ModelRenderer
-from Python.utils.xai_svm import SVMExplainer
-from Python.utils.reset_directory import reset_directory
+from utils.py_logger import CustomLogger
+from utils.cv_manager import CVManager
+from utils.spm_loader import load_spm_environment
+from utils.tpm_mask_generator import TpmMaskGenerator
+from svm_classifier import SVMClassifier
+from utils.model_renderer import ModelRenderer
+from utils.xai_svm import SVMExplainer
+from utils.reset_directory import reset_directory
 
 
 def run_svm_xai(
     enable_file_logging: bool = False, 
-    output_dir: Optional[Path] = None
+    output_dir: Optional[Path] = None,
+    input_dir: Optional[Path] = None
 ) -> None:
     """
     Executes the analytical extraction maps from the saved Linear SVM models.
@@ -42,6 +43,10 @@ def run_svm_xai(
     # Path injection
     current_dir = Path(__file__).parent.resolve()
     base_out = output_dir.resolve() if output_dir else current_dir
+    if input_dir:
+        project_base_dir = input_dir.parent.resolve()
+    else:
+        project_base_dir = current_dir.parent.parent.resolve()
     common_setup_dir = base_out / "Common_Setup_Results"
     registry_csv_path = common_setup_dir / "cohort_registry.csv"
     folds_json_path = common_setup_dir / "cv_folds_registry.json"
@@ -129,7 +134,7 @@ def run_svm_xai(
     # Use SVMClassifier to load data with cohort registry
     log.info("Phase 2: Loading cohort registry and TPM Mask...")
     svm_engine = SVMClassifier(logger=log, param_grid={})
-    _, X_full, y_full = svm_engine.load_data(str(registry_csv_path), str(mask_path))
+    _, X_full, y_full = svm_engine.load_data(str(registry_csv_path), str(mask_path), str(project_base_dir))
     cv_splits = CVManager.load_from_json(str(folds_json_path))
 
     log.info("Phase 3: Extracting XAI patterns (Raw, Haufe, Gaonkar) per fold...")
@@ -143,7 +148,12 @@ def run_svm_xai(
     registry_df = pd.read_csv(registry_csv_path)
     ctrl_candidates = registry_df[registry_df['subject_id'].str.contains("CTRL-117")]
     
-    bg_path = str(ctrl_candidates.iloc[0]['file_path']) if not ctrl_candidates.empty else None
+    if not ctrl_candidates.empty:
+        relative_bg_path = ctrl_candidates.iloc[0]['file_path']
+        bg_path = str((Path(project_base_dir) / relative_bg_path).resolve())
+    else:
+        bg_path = None
+        log.warning(f"Background subject CTRL-117 not found. Rendering will be skipped.")
 
     for split in cv_splits:
         fold_id = split['fold']
@@ -242,6 +252,3 @@ def run_svm_xai(
             )
 
     log.success("--- SVM XAI EXTRACTION COMPLETE ---")
-
-if __name__ == "__main__":
-    run_svm_xai()

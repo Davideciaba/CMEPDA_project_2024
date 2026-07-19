@@ -14,7 +14,7 @@ import seaborn as sns
 from matplotlib.colors import Normalize
 from sklearn.metrics import auc
 from typing import List, Dict, Any, Tuple
-from Python.utils.py_logger import CustomLogger
+from utils.py_logger import CustomLogger
 
 class ModelRenderer:
     """

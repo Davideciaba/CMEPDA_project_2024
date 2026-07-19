@@ -11,7 +11,7 @@ import pandas as pd
 import nibabel as nib
 from typing import Dict, List
 
-from Python.utils.py_logger import CustomLogger
+from utils.py_logger import CustomLogger
 
 class ROIAnalyzer:
     """

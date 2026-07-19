@@ -56,9 +56,8 @@ function RunMaskComparison(enableFileLogging, outputDir, inputDir, csvName)
         %% Environment initialization and logging
 
         % Define the base paths and file names
-        scriptPath = fileparts(mfilename('fullpath'));
-        MATLABPath = fileparts(scriptPath);
-        projectRoot = fileparts(MATLABPath);
+        MATLABPath = fileparts(mfilename('fullpath'));
+        projectRoot = fileparts(fileparts(MATLABPath));
         utilsPath = fullfile(MATLABPath, 'utils');
 
         % Determine cohort dir path
@@ -70,7 +69,7 @@ function RunMaskComparison(enableFileLogging, outputDir, inputDir, csvName)
 
         % Determine output root
         if isempty(outputDir)
-                outputRoot = scriptPath;
+                outputRoot = MATLABPath;
         else
                 outputRoot = outputDir;
         end

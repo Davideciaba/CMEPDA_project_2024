@@ -13,19 +13,20 @@ import nibabel as nib
 import sys
 import pathlib
 
-# Dynamically resolve paths using pathlib
 current_dir= pathlib.Path(__file__).resolve().parent
-parent_dir= current_dir.parent
+project_dir= current_dir.parent
+python_dir = project_dir / "CMEPDA_project_2024" / "Python" 
 
-# Add the parent directory to sys.path to allow imports from there
-sys.path.append(str(parent_dir))
+# Add the project and Python directory to sys.path
+sys.path.append(str(project_dir))
+sys.path.append(str(python_dir))
 
-from Python.utils.tpm_mask_generator import TpmMaskGenerator
-from Python.utils.py_logger import CustomLogger
+from CMEPDA_project_2024.Python.utils.tpm_mask_generator import TpmMaskGenerator
+from CMEPDA_project_2024.Python.utils.py_logger import CustomLogger
 
 class TestTpmMaskGenerator(unittest.TestCase):
     """
-    Test suite for Python.utils.tpm_mask_generator.TpmMaskGenerator.
+    Test suite for TpmMaskGenerator.
     
     PURPOSE:
         Secures the integrity of external file loading and ensures spatial 
@@ -37,9 +38,9 @@ class TestTpmMaskGenerator(unittest.TestCase):
         self.logger = CustomLogger(name="TestTPM")
         self.gen = TpmMaskGenerator(logger=self.logger)
 
-    @patch('Python.utils.tpm_mask_generator.nib.load')
-    @patch('Python.utils.tpm_mask_generator.pd.read_csv')
-    @patch('Python.utils.tpm_mask_generator.nib.save')
+    @patch('CMEPDA_project_2024.Python.utils.tpm_mask_generator.nib.load')
+    @patch('CMEPDA_project_2024.Python.utils.tpm_mask_generator.pd.read_csv')
+    @patch('CMEPDA_project_2024.Python.utils.tpm_mask_generator.nib.save')
     def test_generate_mask_flow(self, mock_save, mock_csv, mock_load) -> None:
         """
         Validates the standard operating flow of the generator.
@@ -58,12 +59,12 @@ class TestTpmMaskGenerator(unittest.TestCase):
         
         mock_load.side_effect = [mock_img, mock_img] # Returns Reference, then TPM
         
-        self.gen.generate_mask("reg.csv", "tpm.nii", "mask.nii")
+        self.gen.generate_mask("reg.csv", "tpm.nii", "mask.nii", "dummy_base_dir")
         
         mock_save.assert_called_once()
 
-    @patch('Python.utils.tpm_mask_generator.nib.load')
-    @patch('Python.utils.tpm_mask_generator.pd.read_csv')
+    @patch('CMEPDA_project_2024.Python.utils.tpm_mask_generator.nib.load')
+    @patch('CMEPDA_project_2024.Python.utils.tpm_mask_generator.pd.read_csv')
     def test_spatial_validation_mismatch(self, mock_csv, mock_load) -> None:
         """
         Asserts that a ValueError is raised if the TPM dimension does not match the cohort.
@@ -86,7 +87,7 @@ class TestTpmMaskGenerator(unittest.TestCase):
         mock_load.side_effect = [mock_ref, mock_tpm]
         
         with self.assertRaises(ValueError):
-            self.gen.generate_mask("reg.csv", "tpm.nii", "mask.nii")
+            self.gen.generate_mask("reg.csv", "tpm.nii", "mask.nii", "dummy_base_dir")
 
 if __name__ == '__main__':
     unittest.main()

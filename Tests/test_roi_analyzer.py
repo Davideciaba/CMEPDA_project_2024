@@ -11,19 +11,21 @@ import numpy as np
 import pandas as pd
 import sys
 import pathlib
-# Dynamically resolve paths using pathlib
+
 current_dir= pathlib.Path(__file__).resolve().parent
-parent_dir= current_dir.parent
+project_dir= current_dir.parent
+python_dir = project_dir / "CMEPDA_project_2024" / "Python" 
 
-# Add the parent directory to sys.path to allow imports from there
-sys.path.append(str(parent_dir))
+# Add the project and Python directory to sys.path
+sys.path.append(str(project_dir))
+sys.path.append(str(python_dir))
 
-from Python.utils.roi_analyzer import ROIAnalyzer
-from Python.utils.py_logger import CustomLogger
+from CMEPDA_project_2024.Python.utils.roi_analyzer import ROIAnalyzer
+from CMEPDA_project_2024.Python.utils.py_logger import CustomLogger
 
 class TestROIAnalyzer(unittest.TestCase):
     """
-    Test suite for Python.utils.roi_analyzer.ROIAnalyzer.
+    Test suite for ROIAnalyzer.
     
     PURPOSE:
         Ensures that White Matter and Cerebellum are successfully excluded 
@@ -35,9 +37,9 @@ class TestROIAnalyzer(unittest.TestCase):
         self.logger = CustomLogger(name="TestROI")
         self.analyzer = ROIAnalyzer(logger=self.logger)
 
-    @patch('Python.utils.roi_analyzer.os.path.exists')
-    @patch('Python.utils.roi_analyzer.nib.load')
-    @patch('Python.utils.roi_analyzer.pd.read_csv')
+    @patch('CMEPDA_project_2024.Python.utils.roi_analyzer.os.path.exists')
+    @patch('CMEPDA_project_2024.Python.utils.roi_analyzer.nib.load')
+    @patch('CMEPDA_project_2024.Python.utils.roi_analyzer.pd.read_csv')
     def test_extract_regional_importance_with_filtering(self, mock_read_csv, mock_nib_load, mock_exists) -> None:
         """
         Tests the ROI extraction and the strict filtering of White Matter/Ventricles.

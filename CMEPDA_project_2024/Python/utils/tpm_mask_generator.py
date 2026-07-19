@@ -15,7 +15,7 @@ import numpy as np
 import nibabel as nib
 from typing import Tuple, Any
 
-from Python.utils.py_logger import CustomLogger
+from utils.py_logger import CustomLogger
 
 # Constants
 DEFAULT_THRESHOLD = 0.01
@@ -36,7 +36,7 @@ class TpmMaskGenerator:
         """
         self.logger = logger
 
-    def generate_mask(self, registry_csv_path: str, tpm_nifti_path: str, output_mask_path: str, threshold: float = DEFAULT_THRESHOLD) -> None:
+    def generate_mask(self, registry_csv_path: str, tpm_nifti_path: str, output_mask_path: str, base_dir: str, threshold: float = DEFAULT_THRESHOLD) -> None:
         """
         Main orchestration method to compute and save the TPM Mask.
         
@@ -53,7 +53,7 @@ class TpmMaskGenerator:
         self.logger.info("--- Starting TPM Preprocessing ---")
         
         # Extract reference data
-        ref_shape, ref_affine, ref_header = self._get_reference_metadata(registry_csv_path)
+        ref_shape, ref_affine, ref_header = self._get_reference_metadata(registry_csv_path, base_dir)
         
         # Process TPM Volume
         tpm_data, tpm_affine = self._process_tpm_volume(tpm_nifti_path)
@@ -78,7 +78,7 @@ class TpmMaskGenerator:
             self.logger.error(f"Failed to export NIfTI mask: {e}")
             raise
 
-    def _get_reference_metadata(self, csv_path: str) -> Tuple[Tuple[int, ...], np.ndarray, Any]:
+    def _get_reference_metadata(self, csv_path: str, base_dir: str) -> Tuple[Tuple[int, ...], np.ndarray, Any]:
         """
         Extracts physical dimensions and the affine matrix from the cohort's first volume.
         
@@ -91,23 +91,32 @@ class TpmMaskGenerator:
         """
         try:
             df = pd.read_csv(csv_path)
-            if df.empty:
-                raise ValueError("Registry CSV is empty.")
-                
-            first_volume_path = df.iloc[0]['file_path']
-            
-            img = nib.load(first_volume_path)
-            self.logger.success("Reference spatial metadata successfully extracted.")
-            return img.shape, img.affine, img.header
-            
         except FileNotFoundError:
             self.logger.error(f"Registry CSV not found at: {csv_path}")
             raise
-        except KeyError:
+        
+        if df.empty:
+            self.logger.error("Registry CSV is empty.")
+            raise ValueError("Registry CSV is empty.")
+            
+        if 'file_path' not in df.columns:
             self.logger.error(f"Invalid CSV structure. Missing 'file_path' column in {csv_path}")
+            raise KeyError(f"Missing 'file_path' column in {csv_path}")
+
+        relative_path = df.iloc[0]['file_path']
+
+        base_path = pathlib.Path(base_dir).resolve()
+        absolute_volume_path = (base_path / relative_path).resolve()  
+
+        try:
+            img = nib.load(str(absolute_volume_path))
+            self.logger.success("Reference spatial metadata successfully extracted.")
+            return img.shape, img.affine, img.header
+        except FileNotFoundError:
+            self.logger.error(f"NIfTI volume not found at absolute path: {absolute_volume_path}")
             raise
         except nib.filebasedimages.ImageFileError:
-            self.logger.error(f"Failed to read the reference NIfTI volume at: {first_volume_path}")
+            self.logger.error(f"Failed to read the reference NIfTI volume at: {absolute_volume_path}")
             raise
 
     def _process_tpm_volume(self, tpm_path: str) -> Tuple[np.ndarray, np.ndarray]:

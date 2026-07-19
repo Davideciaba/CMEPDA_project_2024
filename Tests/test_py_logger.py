@@ -13,18 +13,18 @@ import io
 import tempfile
 from unittest.mock import patch
 
-# Dynamically resolve paths using pathlib
+
 current_dir= pathlib.Path(__file__).resolve().parent
-parent_dir= current_dir.parent
+project_dir= current_dir.parent
 
-# Add the parent directory to sys.path to allow imports from there
-sys.path.append(str(parent_dir))
+# Add the project directory to sys.path
+sys.path.append(str(project_dir))
 
-from Python.utils.py_logger import CustomLogger
+from CMEPDA_project_2024.Python.utils.py_logger import CustomLogger
 
 class TestCustomLogger(unittest.TestCase):
     """
-    Test suite for Python.utils.py_logger.CustomLogger.
+    Test suite for CustomLogger.
     
     PURPOSE:
         Validates output streams via StringIO injection, verifies Loguru 

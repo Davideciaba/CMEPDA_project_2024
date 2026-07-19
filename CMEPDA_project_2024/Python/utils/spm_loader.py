@@ -7,14 +7,14 @@ Handles dynamic path resolution via environment variables
 import os
 import sys
 from pathlib import Path
+from typing import Optional
 from dotenv import load_dotenv
 
 ENV_VAR_NAME = "SPM_DIR"
 DOTENV_FILE = ".env"
-PROJECT_BOUNDARY = "CMEPDA_project_2024"
 SPM_SIGNATURE = "spm.m"
 
-def _find_env_file(start_path: Path) -> Path | None:
+def _find_env_file(start_path: Path) -> Optional[Path]:
     """
     Traverses upwards from a given starting path to locate the .env file.
     Halts if the specific project directory is reached.
@@ -27,7 +27,7 @@ def _find_env_file(start_path: Path) -> Path | None:
         if potential_env.is_file():
             return potential_env
         
-        if current_path.name == PROJECT_BOUNDARY or current_path.parent == current_path:
+        if current_path.parent == current_path:
             break
             
         current_path = current_path.parent
@@ -51,14 +51,14 @@ def load_spm_environment() -> Path:
         
     if env_path:
         # Load .env file into environment variables
-        load_dotenv(dotenv_path=DOTENV_FILE)
+        load_dotenv(dotenv_path=str(env_path))
 
     spm_dir_str = os.getenv(ENV_VAR_NAME)
 
     if not spm_dir_str:
         raise EnvironmentError(
             f"SPM path not found. Set the '{ENV_VAR_NAME}' env variable or "
-            f"ensure a '{DOTENV_FILE}' file exists within {PROJECT_BOUNDARY}."
+            f"ensure a '{DOTENV_FILE}' file exists in the project hierarchy.."
         )
 
     spm_path = Path(spm_dir_str).resolve()

@@ -11,6 +11,7 @@ import numpy as np
 import pandas as pd
 import nibabel as nib
 from typing import Dict, List, Tuple, Any
+from pathlib import Path
 
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import StandardScaler
@@ -24,7 +25,7 @@ from sklearn.metrics import (
     confusion_matrix,
     roc_curve
 )
-from Python.utils.py_logger import CustomLogger
+from utils.py_logger import CustomLogger
 
 
 class SVMClassifier:
@@ -46,13 +47,14 @@ class SVMClassifier:
         self.inner_folds = inner_folds
 
     @staticmethod
-    def load_data(csv_path: str, mask_path: str) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+    def load_data(csv_path: str, mask_path: str, base_dir: str) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
         """
         Loads NIfTI volumes, extracts valid voxels via mask, and flattens to 1D.
             
         Args:
             csv_path (str): Absolute path to the normalized cohort CSV.
             mask_path (str): Absolute path to the binarized TPM Mask.
+            base_dir (str): Absolute path to the project root for relative path resolution.
             
         Returns:
             Tuple[np.ndarray, np.ndarray, np.ndarray]: 
@@ -63,13 +65,21 @@ class SVMClassifier:
         
         df = pd.read_csv(csv_path)
         mask_bool = nib.load(mask_path).get_fdata() > 0
+        base_path = Path(base_dir).resolve()
         
         subjects, X_list, y_list = [], [], []
         for _, row in df.iterrows():
             subjects.append(str(row['subject_id']))
             y_list.append(int(row['label']))
-            img_data = nib.load(row['file_path']).get_fdata(dtype=np.float32)
+            relative_nifti_path = row['file_path']
+            absolute_volume_path = (base_path / relative_nifti_path).resolve()
             
+            try:
+                img_data = nib.load(str(absolute_volume_path)).get_fdata(dtype=np.float32)
+            except FileNotFoundError:
+                raise FileNotFoundError(
+                    f"No such file or no access. Failed to load NIfTI volume at absolute path: {absolute_volume_path}"
+                )
             X_list.append(img_data[mask_bool])
             
         return np.array(subjects), np.array(X_list, dtype=np.float32), np.array(y_list)

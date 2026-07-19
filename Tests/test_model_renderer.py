@@ -12,19 +12,20 @@ import pandas as pd
 import sys
 import pathlib
 
-# Dynamically resolve paths using pathlib
 current_dir= pathlib.Path(__file__).resolve().parent
-parent_dir= current_dir.parent
+project_dir= current_dir.parent
+python_dir = project_dir / "CMEPDA_project_2024" / "Python" 
 
-# Add the parent directory to sys.path to allow imports from there
-sys.path.append(str(parent_dir))
+# Add the project and Python directory to sys.path
+sys.path.append(str(project_dir))
+sys.path.append(str(python_dir))
 
-from Python.utils.model_renderer import ModelRenderer
-from Python.utils.py_logger import CustomLogger
+from CMEPDA_project_2024.Python.utils.model_renderer import ModelRenderer
+from CMEPDA_project_2024.Python.utils.py_logger import CustomLogger
 
 class TestModelRenderer(unittest.TestCase):
     """
-    Test suite for Python.utils.model_renderer.ModelRenderer.
+    Test suite for ModelRenderer
     
     PURPOSE:
         Isolates the visualization engine using mock patching to avoid physical 
@@ -45,8 +46,8 @@ class TestModelRenderer(unittest.TestCase):
             'Mean_ROI_Signal': [0.5, -0.8, 0.2]
         })
 
-    @patch('Python.utils.model_renderer.plt.savefig')
-    @patch('Python.utils.model_renderer.nib.load')
+    @patch('CMEPDA_project_2024.Python.utils.model_renderer.plt.savefig')
+    @patch('CMEPDA_project_2024.Python.utils.model_renderer.nib.load')
     def test_plot_3d_activation_map_dimension_mismatch(self, mock_nib_load, mock_savefig) -> None:
         """
         Verifies dimensional mismatches.
