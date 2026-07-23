@@ -1,6 +1,3 @@
-torch
-torchvision
-monai
 scikit-learn
 statsmodels
 joblib

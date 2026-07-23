@@ -51,6 +51,7 @@ def run_xai_comparison(
     
     log = CustomLogger(name="XAI_Comparison")
     log.add_console_handler(level="DEBUG", use_colors=True)
+    log.add_context("Module", "XAI Comparison")
     
     if enable_file_logging:
         reset_directory(log_dir, log)

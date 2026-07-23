@@ -55,6 +55,7 @@ def cv_setup(
     # Logger initialization
     log = CustomLogger(name="CVSetup")
     log.add_console_handler(level="DEBUG", use_colors=True)
+    log.add_context("Module", "CV Setup")
     if enable_file_logging:
         reset_directory(log_dir, log)
         log_path = log_dir / "CVSetup.log"

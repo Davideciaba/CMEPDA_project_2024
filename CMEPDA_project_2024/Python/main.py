@@ -147,7 +147,7 @@ def main(argv=None) -> int:
     logger.add_console_handler(level="DEBUG", use_colors=True)
     
     if not (args.run_setup or args.run_svm or args.run_xai or args.run_compare):
-        logger.warning("No execution flags provided. Pass --run-setup, --run-svm or --run-xai to begin.")
+        logger.warning("No execution flags provided. Pass -set, -svm, -xai or -xc to begin.")
         logger.info("Use 'python main.py --help' for usage instructions.")
         return 0
 
@@ -164,13 +164,13 @@ def main(argv=None) -> int:
         if args.run_setup:
             logger.info("--- Handing execution over to Setup Orchestrator ---")
             cv_setup(
-                enable_file_logging=args.enable_file_logging, 
-                output_dir=active_output_dir,
-                input_dir=active_input_dir,
-                csv_name=args.csv_name,
-                outer_folds=args.outer_folds,
-                inner_folds=args.inner_folds
-            )
+                    enable_file_logging=args.enable_file_logging, 
+                    output_dir=active_output_dir,
+                    input_dir=active_input_dir,
+                    csv_name=args.csv_name,
+                    outer_folds=args.outer_folds,
+                    inner_folds=args.inner_folds
+                )
             logger.success("Setup Phase completed successfully.")
 
         # Linear SVM Pipeline

@@ -125,10 +125,6 @@ class CustomLogger:
         PURPOSE:
             Allows temporary injection of metadata (e.g., Fold ID, Epoch) that is 
             automatically cleared when the execution block exits.
-            
-        Usage:
-            with log.context(Source="MATLAB", Script="preprocessing.m"):
-                log.info("Running...")
         """
         # Save the current state of the context
         old_context = self.extra_context.copy()

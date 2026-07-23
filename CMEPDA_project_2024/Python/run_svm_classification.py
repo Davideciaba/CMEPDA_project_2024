@@ -69,6 +69,7 @@ def run_svm_classification(
     # Logger initialization
     log = CustomLogger(name="SVMClassification")
     log.add_console_handler(level="DEBUG", use_colors=True)
+    log.add_context("Module", "SVM Classification")
 
     if enable_file_logging:
         reset_directory(log_dir, log)

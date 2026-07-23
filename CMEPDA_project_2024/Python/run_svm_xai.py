@@ -61,6 +61,7 @@ def run_svm_xai(
     # Logger initialization
     log = CustomLogger(name="SVM_XAI_Pipeline")
     log.add_console_handler(level="DEBUG", use_colors=True)
+    log.add_context("Module", "SVM XAI")
 
     if enable_file_logging:
         reset_directory(xai_log_dir, log)
